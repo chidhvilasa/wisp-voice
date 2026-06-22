@@ -23,6 +23,7 @@
     "lucide-react": "^1.21.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "rnnoise-wasm": "^0.0.1-security",
     "shadcn": "^4.11.0",
     "simple-peer": "^9.11.1",
     "tailwind-merge": "^3.6.0",
