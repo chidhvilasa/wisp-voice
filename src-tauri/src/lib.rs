@@ -1,7 +1,8 @@
 mod commands;
 
-use commands::hotkeys::register_hotkeys;
+use commands::hotkeys::{register_hotkeys, update_hotkeys};
 use commands::overlay::{get_overlay_position, hide_overlay, set_overlay_position, show_overlay};
+use commands::soundboard::{delete_soundboard_file, save_soundboard_file};
 use commands::sysinfo::{get_app_resource_usage, SysinfoState};
 use commands::tray::{setup_tray, update_tray_icon};
 use tauri::Manager;
@@ -32,7 +33,10 @@ pub fn run() {
             set_overlay_position,
             get_overlay_position,
             update_tray_icon,
-            get_app_resource_usage
+            get_app_resource_usage,
+            update_hotkeys,
+            save_soundboard_file,
+            delete_soundboard_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

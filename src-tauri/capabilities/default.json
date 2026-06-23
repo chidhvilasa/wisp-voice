@@ -4,9 +4,14 @@
   "description": "Capability for the main window",
   "windows": ["main", "overlay"],
   "permissions": [
-    "core:default",
-    "opener:default",
-    "global-shortcut:default",
-    "log:default"
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-position",
+    "core:window:allow-set-focus",
+    "core:event:allow-emit",
+    "core:event:allow-listen",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "log:allow-log"
   ]
 }

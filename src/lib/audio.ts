@@ -17,6 +17,7 @@ export class AudioPipeline {
   private destinationNode: MediaStreamAudioDestinationNode | null = null
   private outputVolume = 1.0
   private ducked = false
+  private echoCancellation = true
 
   async init(stream: MediaStream): Promise<MediaStream> {
     this.destroy()
@@ -48,6 +49,14 @@ export class AudioPipeline {
 
   setNoiseSuppression(enabled: boolean): void {
     this.workletNode?.port.postMessage({ type: 'set-noise-suppression', enabled })
+  }
+
+  setEchoCancellation(enabled: boolean): void {
+    this.echoCancellation = enabled
+  }
+
+  getEchoCancellation(): boolean {
+    return this.echoCancellation
   }
 
   setMicVolume(volume: number): void {

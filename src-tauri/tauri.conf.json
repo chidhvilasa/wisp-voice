@@ -34,7 +34,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' ws: wss:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
     }
   },
   "bundle": {

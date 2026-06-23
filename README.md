@@ -65,3 +65,10 @@ Set `VITE_SIGNALING_URL` in `.env` to the deployed Worker URL (see `.env.example
 ```bash
 npx vitest run
 ```
+
+## Security
+
+- All voice is end-to-end encrypted via DTLS-SRTP, built into WebRTC — no custom crypto, no plaintext audio ever leaves the device.
+- The signaling server is an ephemeral relay only: it brokers connection setup and stores zero data.
+- A strict Content-Security-Policy is enforced via Tauri's security config to limit script, network, and media sources.
+- No telemetry, no analytics, no accounts required.

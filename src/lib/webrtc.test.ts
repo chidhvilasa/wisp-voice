@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WispVoiceEngine } from './webrtc'
+import { AudioPipeline } from './audio'
 
 // ---------------------------------------------------------------------------
 // Mock MediaStream / getUserMedia
@@ -389,6 +390,30 @@ describe('WispVoiceEngine', () => {
     engine.setMuted(false)
     expect(track!.enabled).toBe(true)
 
+    engine.disconnect()
+  })
+
+  it('setNoiseSuppression delegates to AudioPipeline', async () => {
+    const engine = new WispVoiceEngine('ws://localhost:8787')
+    await engine.connect('ROOM02', 'Alice')
+
+    const spy = vi.spyOn(AudioPipeline.prototype, 'setNoiseSuppression')
+    engine.setNoiseSuppression(false)
+    expect(spy).toHaveBeenCalledWith(false)
+
+    spy.mockRestore()
+    engine.disconnect()
+  })
+
+  it('setOutputVolume delegates to AudioPipeline', async () => {
+    const engine = new WispVoiceEngine('ws://localhost:8787')
+    await engine.connect('ROOM03', 'Alice')
+
+    const spy = vi.spyOn(AudioPipeline.prototype, 'setOutputVolume')
+    engine.setOutputVolume(1.5)
+    expect(spy).toHaveBeenCalledWith(1.5)
+
+    spy.mockRestore()
     engine.disconnect()
   })
 

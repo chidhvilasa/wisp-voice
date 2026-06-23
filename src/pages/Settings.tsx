@@ -36,6 +36,18 @@ const SNAP_PADDING = 16
 
 type Corner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      resolve(result.split(',')[1] ?? '')
+    }
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
+
 function comboFromEvent(event: KeyboardEvent): string | null {
   if (['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) return null
   const parts: string[] = []
@@ -384,41 +396,55 @@ function SoundboardTab() {
   }, [])
 
   const handleFileChosen = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
+    async (event: ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0]
       const slot = pendingSlotRef.current
       event.target.value = ''
       if (!file || slot === null) return
-      const url = URL.createObjectURL(file)
-      setSoundboardFile(slot, url)
-      setFileNames((prev) => ({ ...prev, [slot]: file.name }))
+
+      try {
+        const data = await readFileAsBase64(file)
+        const path = await invoke<string>('save_soundboard_file', {
+          index: slot,
+          data,
+          filename: file.name,
+        })
+        setSoundboardFile(slot, path)
+        setFileNames((prev) => ({ ...prev, [slot]: file.name }))
+      } catch (error) {
+        console.warn('Failed to save soundboard file', error)
+      }
     },
     [setSoundboardFile],
   )
 
   const handlePreview = useCallback(
     async (slot: number) => {
-      const url = soundboardFiles[slot]
-      if (!url) return
+      const path = soundboardFiles[slot]
+      if (!path) return
       try {
-        const context = new AudioContext()
-        const response = await fetch(url)
-        const arrayBuffer = await response.arrayBuffer()
-        const audioBuffer = await context.decodeAudioData(arrayBuffer)
-        const source = context.createBufferSource()
-        source.buffer = audioBuffer
-        source.connect(context.destination)
-        source.onended = () => void context.close()
-        source.start()
+        await invoke('play_soundboard_file', { path })
       } catch {
-        // playback unavailable for this file
+        try {
+          await new Audio(path).play()
+        } catch {
+          // playback unavailable for this file
+        }
       }
     },
     [soundboardFiles],
   )
 
   const handleClear = useCallback(
-    (slot: number) => {
+    async (slot: number) => {
+      const path = soundboardFiles[slot]
+      if (path) {
+        try {
+          await invoke('delete_soundboard_file', { path })
+        } catch {
+          // best-effort cleanup; clear the slot regardless
+        }
+      }
       setSoundboardFile(slot, '')
       setFileNames((prev) => {
         const next = { ...prev }
@@ -426,7 +452,7 @@ function SoundboardTab() {
         return next
       })
     },
-    [setSoundboardFile],
+    [soundboardFiles, setSoundboardFile],
   )
 
   return (
@@ -467,7 +493,7 @@ function SoundboardTab() {
             </button>
             <button
               type="button"
-              onClick={() => handleClear(slot)}
+              onClick={() => void handleClear(slot)}
               disabled={!file}
               aria-label="Clear sound"
               className="rounded p-1.5 text-text-secondary hover:text-muted disabled:opacity-40"

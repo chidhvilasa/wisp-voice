@@ -7,12 +7,18 @@ import path from "node:path";
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
-export default defineConfig(async () => ({
+export default defineConfig(async ({ mode }) => ({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+
+  // Mark console.log/console.debug as side-effect-free so the production minifier
+  // drops their call sites entirely; console.warn/console.error are untouched.
+  esbuild: {
+    pure: mode === "production" ? ["console.log", "console.debug"] : [],
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`

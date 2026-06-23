@@ -10,6 +10,7 @@ export interface WispVoiceEngineEvents {
   'connection-state-change': (state: ConnectionState) => void
   'chat-message': (message: ChatMessage) => void
   'peer-stats': (stats: Map<string, PeerStats>) => void
+  'security-warning': (peerIds: string[]) => void
   error: (error: Error) => void
 }
 
@@ -75,6 +76,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
   private statsIntervalId: ReturnType<typeof setInterval> | null = null
   private muted = false
   private deafened = false
+  private echoCancellationEnabled = true
   private connectionState: ConnectionState = 'idle'
   private pendingConnectResolve: (() => void) | null = null
   private pendingConnectReject: ((error: Error) => void) | null = null
@@ -92,7 +94,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     try {
       this.localStream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: true,
+          echoCancellation: this.echoCancellationEnabled,
           noiseSuppression: true,
           autoGainControl: true,
           sampleRate: 48000,
@@ -242,6 +244,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
 
   async getStats(): Promise<Map<string, PeerStats>> {
     const result = new Map<string, PeerStats>()
+    const insecurePeers: string[] = []
 
     for (const [peerId, pc] of this.connections) {
       let rttMs = 0
@@ -264,6 +267,17 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
           if (report.type === 'inbound-rtp' && typeof report['bytesReceived'] === 'number') {
             bytesReceived += report['bytesReceived'] as number
           }
+          if (report.type === 'transport' && typeof report['dtlsState'] === 'string') {
+            const dtlsState = report['dtlsState'] as string
+            if (import.meta.env.DEV) {
+              console.debug(
+                `wisp: peer ${peerId} dtlsState=${dtlsState} iceConnectionState=${pc.iceConnectionState}`,
+              )
+            }
+            if (dtlsState !== 'connected') {
+              insecurePeers.push(peerId)
+            }
+          }
         })
       } catch {
         // stats unavailable for this peer; report zeroed values
@@ -276,6 +290,10 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
         bytesSent,
         bytesReceived,
       })
+    }
+
+    if (insecurePeers.length > 0) {
+      this.emit('security-warning', insecurePeers)
     }
 
     return result
@@ -299,6 +317,67 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
 
   setDuckAmount(amount: number): void {
     this.duckAmount = amount
+  }
+
+  setNoiseSuppression(enabled: boolean): void {
+    this.audioPipeline.setNoiseSuppression(enabled)
+  }
+
+  setMicVolume(volume: number): void {
+    this.audioPipeline.setMicVolume(volume)
+  }
+
+  setOutputVolume(volume: number): void {
+    this.audioPipeline.setOutputVolume(volume)
+  }
+
+  async setEchoCancellation(enabled: boolean): Promise<void> {
+    this.echoCancellationEnabled = enabled
+    this.audioPipeline.setEchoCancellation(enabled)
+
+    if (!this.localStream) return
+
+    let newStream: MediaStream
+    try {
+      newStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: enabled,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 48000,
+          channelCount: 1,
+        },
+        video: false,
+      })
+    } catch (error) {
+      console.warn('Failed to apply echo cancellation setting', error)
+      return
+    }
+
+    for (const track of this.localStream.getTracks()) {
+      track.stop()
+    }
+    this.localStream = newStream
+    for (const track of this.localStream.getAudioTracks()) {
+      track.enabled = !this.muted
+    }
+
+    try {
+      this.outgoingStream = await this.audioPipeline.init(this.localStream)
+    } catch (error) {
+      console.warn('Audio pipeline re-initialization failed, using raw microphone stream', error)
+      this.outgoingStream = this.localStream
+    }
+
+    const newTrack = this.outgoingStream.getAudioTracks()[0]
+    if (!newTrack) return
+
+    for (const pc of this.connections.values()) {
+      const sender = pc.getSenders().find((s) => s.track?.kind === 'audio')
+      if (sender) {
+        void sender.replaceTrack(newTrack)
+      }
+    }
   }
 
   getOutgoingStream(): MediaStream | null {

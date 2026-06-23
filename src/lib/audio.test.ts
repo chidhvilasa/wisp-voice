@@ -128,6 +128,17 @@ describe('AudioPipeline', () => {
     pipeline.destroy()
   })
 
+  it('setEchoCancellation flag is stored and respected on next init()', async () => {
+    const pipeline = new AudioPipeline()
+    pipeline.setEchoCancellation(false)
+    expect(pipeline.getEchoCancellation()).toBe(false)
+
+    await pipeline.init(new MockMediaStream([new MockMediaStreamTrack()]) as unknown as MediaStream)
+    expect(pipeline.getEchoCancellation()).toBe(false)
+
+    pipeline.destroy()
+  })
+
   it('setDucked(true) reduces gain, setDucked(false) restores it', async () => {
     const pipeline = new AudioPipeline()
     await pipeline.init(new MockMediaStream([new MockMediaStreamTrack()]) as unknown as MediaStream)

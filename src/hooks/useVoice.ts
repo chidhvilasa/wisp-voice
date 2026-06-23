@@ -222,6 +222,37 @@ export function useVoice(): UseVoiceResult {
   ])
 
   useEffect(() => {
+    const unsubscribe = useSettingsStore.subscribe((state, prevState) => {
+      const engine = engineRef.current
+      if (useVoiceStore.getState().connectionState !== 'connected') return
+
+      if (state.noiseSuppression !== prevState.noiseSuppression) {
+        engine.setNoiseSuppression(state.noiseSuppression)
+      }
+      if (state.micVolume !== prevState.micVolume) {
+        engine.setMicVolume(state.micVolume)
+      }
+      if (state.outputVolume !== prevState.outputVolume) {
+        engine.setOutputVolume(state.outputVolume)
+      }
+      if (state.echoCancellation !== prevState.echoCancellation) {
+        void engine.setEchoCancellation(state.echoCancellation)
+      }
+    })
+
+    return unsubscribe
+  }, [])
+
+  useEffect(() => {
+    const unsubscribe = useSettingsStore.subscribe((state, prevState) => {
+      if (state.hotkeys === prevState.hotkeys) return
+      void invoke('update_hotkeys', { hotkeys: state.hotkeys }).catch(() => {})
+    })
+
+    return unsubscribe
+  }, [])
+
+  useEffect(() => {
     let cancelled = false
     const unlistenFns: Array<() => void> = []
 
