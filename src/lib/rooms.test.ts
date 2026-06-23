@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createRoom, getRecentRooms, removeRecentRoom, saveRecentRoom } from './rooms'
+import { createRoom, getRecentRooms, joinRoom, removeRecentRoom, saveRecentRoom } from './rooms'
 import type { RecentRoom } from '../types'
 
 function makeRoom(code: string, lastUsed: number): RecentRoom {
@@ -86,6 +86,18 @@ describe('rooms', () => {
       const rooms = getRecentRooms()
       expect(rooms).toHaveLength(1)
       expect(rooms[0]?.code).toBe('BBB222')
+    })
+  })
+
+  describe('joinRoom', () => {
+    it('rejects codes that are not 6 alphanumeric characters', async () => {
+      await expect(joinRoom('ABC')).rejects.toThrow(/6 alphanumeric characters/i)
+      await expect(joinRoom('TOOLONGCODE')).rejects.toThrow(/6 alphanumeric characters/i)
+      await expect(joinRoom('AB-12C')).rejects.toThrow(/6 alphanumeric characters/i)
+    })
+
+    it('rejects empty string', async () => {
+      await expect(joinRoom('')).rejects.toThrow(/6 alphanumeric characters/i)
     })
   })
 })

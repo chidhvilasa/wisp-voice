@@ -1,51 +1,54 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { Component } from 'react'
+import type { ErrorInfo, ReactNode } from 'react'
+import Router from './router'
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
-
-  return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
-  );
+interface ErrorBoundaryProps {
+  children: ReactNode
 }
 
-export default App;
+interface ErrorBoundaryState {
+  hasError: boolean
+}
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false }
+
+  static getDerivedStateFromError(): ErrorBoundaryState {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo): void {
+    console.error('Wisp encountered an unexpected error:', error, info)
+  }
+
+  render(): ReactNode {
+    if (this.state.hasError) {
+      return (
+        <div className="flex h-screen w-screen flex-col items-center justify-center gap-4 bg-background text-text-primary">
+          <p className="text-sm text-text-secondary">Something went wrong. Please restart Wisp.</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-card bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover"
+          >
+            Reload
+          </button>
+        </div>
+      )
+    }
+
+    return this.props.children
+  }
+}
+
+function App() {
+  return (
+    <div className="min-h-screen bg-background">
+      <ErrorBoundary>
+        <Router />
+      </ErrorBoundary>
+    </div>
+  )
+}
+
+export default App

@@ -2,6 +2,7 @@ mod commands;
 
 use commands::hotkeys::register_hotkeys;
 use commands::overlay::{get_overlay_position, hide_overlay, set_overlay_position, show_overlay};
+use commands::sysinfo::{get_app_resource_usage, SysinfoState};
 use commands::tray::{setup_tray, update_tray_icon};
 use tauri::Manager;
 
@@ -17,6 +18,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_log::Builder::new().build())
+        .manage(SysinfoState::default())
         .setup(|app| {
             let handle = app.handle().clone();
             setup_tray(handle.clone())?;
@@ -29,7 +31,8 @@ pub fn run() {
             hide_overlay,
             set_overlay_position,
             get_overlay_position,
-            update_tray_icon
+            update_tray_icon,
+            get_app_resource_usage
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

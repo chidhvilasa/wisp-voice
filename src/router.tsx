@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import Overlay from './overlay/Overlay'
+import Home from './pages/Home'
+import Room from './pages/Room'
 
 function getRoute(): string {
   return window.location.hash.replace(/^#/, '') || '/'
@@ -18,5 +20,9 @@ export default function Router() {
     return <Overlay />
   }
 
-  return <div>Wisp App</div>
+  if (route.startsWith('/room')) {
+    return <Room />
+  }
+
+  return <Home />
 }

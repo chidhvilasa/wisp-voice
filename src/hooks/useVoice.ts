@@ -15,6 +15,7 @@ export interface UseVoiceResult {
   toggleMute: () => void
   toggleDeafen: () => void
   sendChat: (content: string) => void
+  setPeerVolume: (peerId: string, volume: number) => void
   connectionState: ConnectionState
   peers: Peer[]
 }
@@ -131,6 +132,10 @@ export function useVoice(): UseVoiceResult {
     [],
   )
 
+  const setPeerVolume = useCallback((peerId: string, volume: number) => {
+    engineRef.current.setPeerVolume(peerId, volume)
+  }, [])
+
   useEffect(() => {
     const engine = engineRef.current
 
@@ -162,6 +167,10 @@ export function useVoice(): UseVoiceResult {
       if (state === 'connected') {
         reconnectAttemptsRef.current = 0
         clearReconnectTimer()
+        const { roomCode, displayName } = useVoiceStore.getState()
+        if (roomCode) {
+          lastRoomRef.current = { code: roomCode, displayName }
+        }
       } else if (state === 'reconnecting') {
         scheduleReconnect()
       }
@@ -270,6 +279,7 @@ export function useVoice(): UseVoiceResult {
     toggleMute,
     toggleDeafen,
     sendChat,
+    setPeerVolume,
     connectionState,
     peers: Array.from(peersMap.values()),
   }

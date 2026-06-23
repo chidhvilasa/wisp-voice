@@ -301,6 +301,10 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     this.duckAmount = amount
   }
 
+  getOutgoingStream(): MediaStream | null {
+    return this.outgoingStream
+  }
+
   sendRoomLocked(): void {
     const payload = JSON.stringify({ type: 'room-locked' })
     for (const channel of this.dataChannels.values()) {

@@ -19,6 +19,7 @@ interface VoiceState {
   localMuted: boolean
   localDeafened: boolean
   localSpeaking: boolean
+  isHost: boolean
   connectionState: ConnectionState
   chatMessages: ChatMessage[]
   setRoomCode: (roomCode: string) => void
@@ -28,6 +29,7 @@ interface VoiceState {
   setLocalMuted: (muted: boolean) => void
   setLocalDeafened: (deafened: boolean) => void
   setLocalSpeaking: (speaking: boolean) => void
+  setIsHost: (isHost: boolean) => void
   setConnectionState: (state: ConnectionState) => void
   addChatMessage: (message: ChatMessage) => void
   reset: () => void
@@ -40,6 +42,7 @@ const initialState = {
   localMuted: false,
   localDeafened: false,
   localSpeaking: false,
+  isHost: false,
   connectionState: 'idle' as ConnectionState,
   chatMessages: [] as ChatMessage[],
 }
@@ -79,6 +82,8 @@ export const useVoiceStore = create<VoiceState>((set) => ({
   setLocalDeafened: (deafened) => set({ localDeafened: deafened }),
 
   setLocalSpeaking: (speaking) => set({ localSpeaking: speaking }),
+
+  setIsHost: (isHost) => set({ isHost }),
 
   setConnectionState: (connectionState) => set({ connectionState }),
 
