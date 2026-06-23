@@ -43,18 +43,41 @@ function installGetUserMedia(): { lastStream: () => MockMediaStream | null } {
 // ---------------------------------------------------------------------------
 
 class MockGainNode {
-  gain = { value: 1 }
+  gain = {
+    value: 1,
+    linearRampToValueAtTime: vi.fn((value: number) => value),
+  }
   connect = vi.fn()
   disconnect = vi.fn()
 }
 
+class MockAnalyserNode {
+  fftSize = 1024
+  connect = vi.fn()
+  disconnect = vi.fn()
+  getFloatTimeDomainData(buffer: Float32Array): void {
+    buffer.fill(0)
+  }
+}
+
 class MockAudioContext {
   destination = {}
+  currentTime = 0
   createGain(): MockGainNode {
     return new MockGainNode()
   }
+  createAnalyser(): MockAnalyserNode {
+    return new MockAnalyserNode()
+  }
   createMediaStreamSource(_stream: unknown): { connect: () => void; disconnect: () => void } {
     return { connect: vi.fn(), disconnect: vi.fn() }
+  }
+  createMediaStreamDestination(): { stream: MockMediaStream; connect: () => void; disconnect: () => void } {
+    return {
+      stream: new MockMediaStream([new MockMediaStreamTrack()]),
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+    }
   }
   async close(): Promise<void> {}
 }

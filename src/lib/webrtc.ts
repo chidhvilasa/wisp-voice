@@ -1,5 +1,7 @@
 import { EventEmitter } from 'eventemitter3'
 import type { ChatMessage, ConnectionQuality, ConnectionState, PeerStats } from '../types'
+import { AudioPipeline } from './audio'
+import { VADProcessor } from './vad'
 
 export interface WispVoiceEngineEvents {
   'peer-joined': (peerId: string) => void
@@ -29,6 +31,7 @@ const ICE_SERVERS: RTCIceServer[] = [
 const MAX_REMOTE_PEERS = 3
 const STATS_INTERVAL_MS = 2000
 const DATA_CHANNEL_LABEL = 'wisp-chat'
+const DEFAULT_DUCK_AMOUNT = 0.2
 
 interface SignalMessage {
   type: string
@@ -56,7 +59,12 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
   private signalingUrl: string
   private ws: WebSocket | null = null
   private localStream: MediaStream | null = null
+  private outgoingStream: MediaStream | null = null
   private audioContext: AudioContext | null = null
+  private audioPipeline: AudioPipeline = new AudioPipeline()
+  private vadProcessors: Map<string, VADProcessor> = new Map()
+  private speakingPeers: Set<string> = new Set()
+  private duckAmount = DEFAULT_DUCK_AMOUNT
   private selfId: string | null = null
   private displayName = ''
   private roomCode = ''
@@ -99,6 +107,13 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
 
     for (const track of this.localStream.getAudioTracks()) {
       track.enabled = !this.muted
+    }
+
+    try {
+      this.outgoingStream = await this.audioPipeline.init(this.localStream)
+    } catch (error) {
+      console.warn('Audio pipeline initialization failed, using raw microphone stream', error)
+      this.outgoingStream = this.localStream
     }
 
     this.startStatsLoop()
@@ -147,6 +162,15 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     }
     this.connections.clear()
     this.gainNodes.clear()
+
+    for (const vad of this.vadProcessors.values()) {
+      vad.destroy()
+    }
+    this.vadProcessors.clear()
+    this.speakingPeers.clear()
+
+    this.audioPipeline.destroy()
+    this.outgoingStream = null
 
     if (this.localStream) {
       for (const track of this.localStream.getTracks()) {
@@ -273,6 +297,10 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     return this.displayName
   }
 
+  setDuckAmount(amount: number): void {
+    this.duckAmount = amount
+  }
+
   private startStatsLoop(): void {
     if (this.statsIntervalId !== null) return
     this.statsIntervalId = setInterval(() => {
@@ -358,9 +386,9 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     const channel = pc.createDataChannel(DATA_CHANNEL_LABEL)
     this.setupDataChannel(remoteId, channel)
 
-    if (this.localStream) {
-      for (const track of this.localStream.getTracks()) {
-        pc.addTrack(track, this.localStream)
+    if (this.outgoingStream) {
+      for (const track of this.outgoingStream.getTracks()) {
+        pc.addTrack(track, this.outgoingStream)
       }
     }
 
@@ -377,9 +405,9 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
 
     const pc = this.connections.get(remoteId) ?? this.createPeerConnection(remoteId)
 
-    if (this.localStream) {
-      for (const track of this.localStream.getTracks()) {
-        pc.addTrack(track, this.localStream)
+    if (this.outgoingStream) {
+      for (const track of this.outgoingStream.getTracks()) {
+        pc.addTrack(track, this.outgoingStream)
       }
     }
 
@@ -473,6 +501,21 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     source.connect(gainNode)
     gainNode.connect(this.audioContext.destination)
     this.gainNodes.set(remoteId, gainNode)
+
+    const vad = new VADProcessor()
+    vad.on('speaking', (isSpeaking) => this.handlePeerSpeaking(remoteId, isSpeaking))
+    vad.init(stream)
+    this.vadProcessors.set(remoteId, vad)
+  }
+
+  private handlePeerSpeaking(peerId: string, isSpeaking: boolean): void {
+    this.emit('speaking', peerId, isSpeaking)
+    if (isSpeaking) {
+      this.speakingPeers.add(peerId)
+    } else {
+      this.speakingPeers.delete(peerId)
+    }
+    this.audioPipeline.setDucked(this.speakingPeers.size > 0, this.duckAmount)
   }
 
   private handlePeerConnectionStateChange(remoteId: string, pc: RTCPeerConnection): void {
@@ -501,6 +544,15 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
       this.dataChannels.delete(peerId)
     }
     this.gainNodes.delete(peerId)
+
+    const vad = this.vadProcessors.get(peerId)
+    if (vad) {
+      vad.destroy()
+      this.vadProcessors.delete(peerId)
+    }
+    if (this.speakingPeers.delete(peerId)) {
+      this.audioPipeline.setDucked(this.speakingPeers.size > 0, this.duckAmount)
+    }
   }
 
   private closeConnection(pc: RTCPeerConnection): void {
