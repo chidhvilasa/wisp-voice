@@ -16,6 +16,21 @@
         "title": "Wisp",
         "width": 800,
         "height": 600
+      },
+      {
+        "label": "overlay",
+        "title": "",
+        "width": 220,
+        "height": 200,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "resizable": false,
+        "x": 20,
+        "y": 20,
+        "focus": false
       }
     ],
     "security": {

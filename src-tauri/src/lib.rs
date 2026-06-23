@@ -1,3 +1,7 @@
+mod commands;
+
+use commands::overlay::{get_overlay_position, hide_overlay, set_overlay_position, show_overlay};
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -10,7 +14,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_log::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![greet])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            show_overlay,
+            hide_overlay,
+            set_overlay_position,
+            get_overlay_position
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

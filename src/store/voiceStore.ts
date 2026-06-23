@@ -1,5 +1,16 @@
 import { create } from 'zustand'
+import { emit } from '@tauri-apps/api/event'
 import type { ChatMessage, ConnectionState, Peer } from '../types'
+
+function emitSafe(event: string, payload: unknown): void {
+  void (async () => {
+    try {
+      await emit(event, payload)
+    } catch {
+      // Tauri APIs unavailable outside a Tauri window (browser/tests)
+    }
+  })()
+}
 
 interface VoiceState {
   roomCode: string
@@ -39,8 +50,13 @@ export const useVoiceStore = create<VoiceState>((set) => ({
 
   setPeer: (peer) =>
     set((state) => {
+      const previous = state.peers.get(peer.id)
       const peers = new Map(state.peers)
       peers.set(peer.id, peer)
+      emitSafe('peers-updated', Array.from(peers.values()))
+      if (!previous || previous.speaking !== peer.speaking) {
+        emitSafe('speaking-changed', { peerId: peer.id, speaking: peer.speaking })
+      }
       return { peers }
     }),
 
@@ -48,10 +64,14 @@ export const useVoiceStore = create<VoiceState>((set) => ({
     set((state) => {
       const peers = new Map(state.peers)
       peers.delete(peerId)
+      emitSafe('peers-updated', Array.from(peers.values()))
       return { peers }
     }),
 
-  setLocalMuted: (muted) => set({ localMuted: muted }),
+  setLocalMuted: (muted) => {
+    emitSafe('mute-changed', muted)
+    set({ localMuted: muted })
+  },
 
   setLocalDeafened: (deafened) => set({ localDeafened: deafened }),
 

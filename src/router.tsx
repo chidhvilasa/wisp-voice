@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import Overlay from './overlay/Overlay'
 
 function getRoute(): string {
   return window.location.hash.replace(/^#/, '') || '/'
@@ -14,7 +15,7 @@ export default function Router() {
   }, [])
 
   if (route.startsWith('/overlay')) {
-    return <div>Wisp Overlay</div>
+    return <Overlay />
   }
 
   return <div>Wisp App</div>
