@@ -91,6 +91,28 @@ describe('WispRoom message relay', () => {
   })
 })
 
+describe('CORS', () => {
+  it('returns Access-Control-Allow-Origin on POST /room so a cross-origin webview can read the response', async () => {
+    const request = new Request('http://localhost/room', { method: 'POST' })
+    const response = await worker.fetch(request, createMockEnv())
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*')
+  })
+
+  it('responds to an OPTIONS preflight request with 204 and CORS headers', async () => {
+    const request = new Request('http://localhost/room', { method: 'OPTIONS' })
+    const response = await worker.fetch(request, createMockEnv())
+    expect(response.status).toBe(204)
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*')
+  })
+
+  it('returns CORS headers on a 404 response too', async () => {
+    const request = new Request('http://localhost/unknown', { method: 'GET' })
+    const response = await worker.fetch(request, createMockEnv())
+    expect(response.status).toBe(404)
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*')
+  })
+})
+
 describe('WispRoom max peers', () => {
   it('rejects the 5th peer connection with room-full', () => {
     const room = createRoom()

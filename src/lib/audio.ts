@@ -23,6 +23,9 @@ export class AudioPipeline {
     this.destroy()
 
     this.audioContext = new AudioContext()
+    if (this.audioContext.state === 'suspended') {
+      void this.audioContext.resume?.()
+    }
     this.source = this.audioContext.createMediaStreamSource(stream)
     this.micGainNode = this.audioContext.createGain()
     this.outputGainNode = this.audioContext.createGain()

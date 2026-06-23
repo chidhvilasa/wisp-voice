@@ -7,7 +7,7 @@ import { WispVoiceEngine } from './webrtc'
 import { AudioPipeline } from './audio'
 import { VADProcessor } from './vad'
 import { createReconnectScheduler, RECONNECT_DELAYS_MS, MAX_RECONNECT_ATTEMPTS } from './reconnect'
-import { joinRoom, createRoom, destroyVoiceEngine } from './rooms'
+import { joinRoom, createRoom, destroyVoiceEngine, saveRecentRoom } from './rooms'
 import { useSettingsStore } from '../store/settingsStore'
 import Overlay from '../overlay/Overlay'
 import type { Peer } from '../types'
@@ -27,6 +27,31 @@ vi.mock('@tauri-apps/api/event', () => ({
       delete listenHandlers[event]
     })
   }),
+}))
+
+// ---------------------------------------------------------------------------
+// Mock @tauri-apps/api/window — lets Overlay's drag handler reach the point
+// where it registers window-level mousemove/mouseup listeners, so the
+// unmount-mid-drag listener leak (bug fix) can be exercised.
+// ---------------------------------------------------------------------------
+
+const { windowMock } = vi.hoisted(() => ({
+  windowMock: {
+    outerPosition: vi.fn(async () => ({ x: 0, y: 0 })),
+    outerSize: vi.fn(async () => ({ width: 220, height: 200 })),
+    setPosition: vi.fn(async () => {}),
+  },
+}))
+
+vi.mock('@tauri-apps/api/window', () => ({
+  getCurrentWindow: () => windowMock,
+  currentMonitor: vi.fn(async () => null),
+  PhysicalPosition: class PhysicalPosition {
+    constructor(
+      public x: number,
+      public y: number,
+    ) {}
+  },
 }))
 
 // ---------------------------------------------------------------------------
@@ -843,5 +868,201 @@ describe('WISP stress tests', () => {
     expect(listenHandlers['peers-updated']).toBeUndefined()
 
     errorSpy.mockRestore()
+  })
+
+  // -------------------------------------------------------------------------
+  // Audit bug-fix regression tests
+  // -------------------------------------------------------------------------
+
+  it('connect() called twice does not create duplicate peer connections', async () => {
+    installEngineMocks()
+    const engine = new WispVoiceEngine('ws://localhost:8787')
+
+    const firstConnect = engine.connect('DUP001', 'Alice')
+    expect(engine.getConnectionState()).toBe('connecting')
+
+    await expect(engine.connect('DUP001', 'Alice')).rejects.toThrow(/already connected or connecting/i)
+
+    await firstConnect
+    expect(MockRTCPeerConnection.instances).toHaveLength(0)
+
+    await expect(engine.connect('DUP001', 'Alice')).rejects.toThrow(/already connected or connecting/i)
+
+    engine.disconnect()
+  })
+
+  it('a rejected createOffer() emits an error event instead of an unhandled rejection', async () => {
+    installEngineMocks()
+    const engineA = new WispVoiceEngine('ws://localhost:8787')
+    const engineB = new WispVoiceEngine('ws://localhost:8787')
+
+    const createOfferSpy = vi
+      .spyOn(MockRTCPeerConnection.prototype, 'createOffer')
+      .mockRejectedValueOnce(new Error('createOffer failed'))
+
+    const errorPromise = new Promise<Error>((resolve) => engineA.on('error', resolve))
+
+    await engineB.connect('OFFERERR', 'Bob')
+    await engineA.connect('OFFERERR', 'Alice')
+
+    const error = await errorPromise
+    expect(error.message).toBe('createOffer failed')
+
+    createOfferSpy.mockRestore()
+    engineA.disconnect()
+    engineB.disconnect()
+  })
+
+  it('attachRemoteStream resumes a suspended AudioContext so remote audio is not silently muted', () => {
+    class SuspendedAudioContext extends MockAudioContext {
+      static instances: SuspendedAudioContext[] = []
+      state: AudioContextState = 'suspended'
+      resume = vi.fn(async () => {})
+      constructor() {
+        super()
+        SuspendedAudioContext.instances.push(this)
+      }
+    }
+    vi.stubGlobal('AudioContext', SuspendedAudioContext)
+
+    const engine = new WispVoiceEngine('ws://localhost:8787')
+    const stream = new MockMediaStream([new MockMediaStreamTrack()]) as unknown as MediaStream
+
+    const internals = engine as unknown as {
+      attachRemoteStream: (remoteId: string, stream: MediaStream) => void
+    }
+    internals.attachRemoteStream('peerX', stream)
+
+    // attachRemoteStream creates its own AudioContext for playback gain, and
+    // also spins up a VADProcessor (vad.ts) with an independent AudioContext.
+    expect(SuspendedAudioContext.instances).toHaveLength(2)
+    for (const instance of SuspendedAudioContext.instances) {
+      expect(instance.resume).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it('cleanupPeer removes the stored peer volume to prevent unbounded growth', () => {
+    const engine = new WispVoiceEngine('ws://localhost:8787')
+    engine.setPeerVolume('peerX', 1.5)
+
+    const internals = engine as unknown as {
+      peerVolumes: Map<string, number>
+      cleanupPeer: (peerId: string) => void
+    }
+    expect(internals.peerVolumes.has('peerX')).toBe(true)
+
+    internals.cleanupPeer('peerX')
+
+    expect(internals.peerVolumes.has('peerX')).toBe(false)
+  })
+
+  it('sendChat does not throw when a data channel rejects an oversized message', async () => {
+    installEngineMocks()
+    const [engineA, engineB, engineC] = await connectMesh('CHATERR', ['Alice', 'Bob', 'Carol'])
+
+    const internals = engineA as unknown as { dataChannels: Map<string, MockRTCDataChannel> }
+    const [firstChannel] = internals.dataChannels.values()
+    vi.spyOn(firstChannel as MockRTCDataChannel, 'send').mockImplementation(() => {
+      throw new TypeError('Message too large')
+    })
+
+    const chatSpy = vi.fn()
+    engineA.on('chat-message', chatSpy)
+
+    expect(() => engineA.sendChat('hello', 'Alice')).not.toThrow()
+    expect(chatSpy).toHaveBeenCalledTimes(1)
+
+    engineA.disconnect()
+    engineB.disconnect()
+    engineC.disconnect()
+  })
+
+  it('createRoom() aborts a hung request instead of hanging forever', async () => {
+    vi.useFakeTimers()
+
+    const fetchMock = vi.fn((_url: string, options?: { signal?: AbortSignal }) => {
+      return new Promise<Response>((_resolve, reject) => {
+        options?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('Aborted', 'AbortError'))
+        })
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const assertion = expect(createRoom()).rejects.toThrow(/unable to create a room/i)
+
+    await vi.advanceTimersByTimeAsync(10000)
+    await assertion
+  })
+
+  it('saveRecentRoom does not throw when localStorage.setItem throws (quota exceeded)', () => {
+    const store = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: () => {
+        throw new DOMException('QuotaExceededError')
+      },
+      removeItem: (key: string) => store.delete(key),
+    })
+
+    expect(() =>
+      saveRecentRoom({ code: 'QUOTA1', name: 'Quota', lastUsed: Date.now(), memberCount: 1 }),
+    ).not.toThrow()
+  })
+
+  it('rehydrating with a partial/old hotkeys object falls back to defaults for missing keys', () => {
+    const options = useSettingsStore.persist.getOptions() as {
+      merge: (persistedState: unknown, currentState: ReturnType<typeof useSettingsStore.getState>) => ReturnType<
+        typeof useSettingsStore.getState
+      >
+    }
+    const currentState = useSettingsStore.getState()
+    const oldPersistedState = {
+      hotkeys: { mute: 'Ctrl+M', deafen: 'Ctrl+D' },
+    }
+
+    const merged = options.merge(oldPersistedState, currentState)
+
+    expect(merged.hotkeys.mute).toBe('Ctrl+M')
+    expect(merged.hotkeys.deafen).toBe('Ctrl+D')
+    expect(merged.hotkeys.overlayToggle).toBe(currentState.hotkeys.overlayToggle)
+  })
+
+  it('Overlay removes window drag listeners on unmount mid-drag (no leaked mousemove handler)', async () => {
+    ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(createElement(Overlay))
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    const target = container.querySelector('[class*="rounded-2xl"]') as HTMLElement
+    const addSpy = vi.spyOn(window, 'addEventListener')
+    const removeSpy = vi.spyOn(window, 'removeEventListener')
+
+    await act(async () => {
+      target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, screenX: 0, screenY: 0 }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(addSpy).toHaveBeenCalledWith('mousemove', expect.any(Function))
+    expect(addSpy).toHaveBeenCalledWith('mouseup', expect.any(Function))
+
+    await act(async () => {
+      root.unmount()
+    })
+    document.body.removeChild(container)
+
+    expect(removeSpy).toHaveBeenCalledWith('mousemove', expect.any(Function))
+    expect(removeSpy).toHaveBeenCalledWith('mouseup', expect.any(Function))
+
+    addSpy.mockRestore()
+    removeSpy.mockRestore()
   })
 })

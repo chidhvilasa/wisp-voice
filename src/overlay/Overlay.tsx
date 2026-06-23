@@ -72,6 +72,14 @@ export default function Overlay() {
 
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isDraggingRef = useRef(false)
+  const dragCleanupRef = useRef<(() => void) | null>(null)
+
+  useEffect(() => {
+    return () => {
+      dragCleanupRef.current?.()
+      dragCleanupRef.current = null
+    }
+  }, [])
 
   useEffect(() => {
     let unlistenPeers: (() => void) | undefined
@@ -199,15 +207,24 @@ export default function Overlay() {
             void win.setPosition(new PhysicalPosition(startPos.x + dx, startPos.y + dy))
           }
 
-          const handleUp = () => {
-            isDraggingRef.current = false
+          const detach = () => {
             window.removeEventListener('mousemove', handleMove)
             window.removeEventListener('mouseup', handleUp)
+            dragCleanupRef.current = null
+          }
+
+          const handleUp = () => {
+            isDraggingRef.current = false
+            detach()
             void snapToNearestCorner()
           }
 
           window.addEventListener('mousemove', handleMove)
           window.addEventListener('mouseup', handleUp)
+          dragCleanupRef.current = () => {
+            isDraggingRef.current = false
+            detach()
+          }
         } catch {
           // Tauri window API unavailable outside a Tauri window (browser/dev preview)
         }

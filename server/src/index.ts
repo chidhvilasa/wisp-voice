@@ -128,7 +128,17 @@ export class WispRoom {
   }
 }
 
+const CORS_HEADERS: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+}
+
 async function handleRequest(request: Request, env: Env): Promise<Response> {
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: CORS_HEADERS })
+  }
+
   const url = new URL(request.url)
 
   if (request.method === 'POST' && url.pathname === '/room') {
@@ -136,7 +146,7 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     const id = env.WISP_ROOM.idFromName(code)
     env.WISP_ROOM.get(id)
     return new Response(JSON.stringify({ code }), {
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...CORS_HEADERS },
     })
   }
 
@@ -144,14 +154,14 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
   if (request.method === 'GET' && wsMatch) {
     const code = wsMatch[1]
     if (!code) {
-      return new Response('Missing room code', { status: 400 })
+      return new Response('Missing room code', { status: 400, headers: CORS_HEADERS })
     }
     const id = env.WISP_ROOM.idFromName(code)
     const stub = env.WISP_ROOM.get(id)
     return stub.fetch(request)
   }
 
-  return new Response('Not found', { status: 404 })
+  return new Response('Not found', { status: 404, headers: CORS_HEADERS })
 }
 
 export default {

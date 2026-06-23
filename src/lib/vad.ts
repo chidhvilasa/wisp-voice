@@ -33,6 +33,9 @@ export class VADProcessor extends EventEmitter<VADProcessorEvents> {
     this.destroy()
 
     this.audioContext = new AudioContext()
+    if (this.audioContext.state === 'suspended') {
+      void this.audioContext.resume?.()
+    }
     this.analyser = this.audioContext.createAnalyser()
     this.analyser.fftSize = FFT_SIZE
     this.buffer = new Float32Array(this.analyser.fftSize)

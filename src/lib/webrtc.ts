@@ -87,6 +87,10 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
   }
 
   async connect(roomCode: string, displayName: string): Promise<void> {
+    if (this.connectionState === 'connecting' || this.connectionState === 'connected') {
+      throw new Error('Already connected or connecting. Call disconnect() first.')
+    }
+
     this.roomCode = roomCode
     this.displayName = displayName
     this.setConnectionState('connecting')
@@ -237,7 +241,11 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     const payload = JSON.stringify({ type: 'chat', ...message })
     for (const channel of this.dataChannels.values()) {
       if (channel.readyState === 'open') {
-        channel.send(payload)
+        try {
+          channel.send(payload)
+        } catch (error) {
+          console.warn('Failed to send chat message to a peer', error)
+        }
       }
     }
     this.emit('chat-message', message)
@@ -389,7 +397,11 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     const payload = JSON.stringify({ type: 'room-locked' })
     for (const channel of this.dataChannels.values()) {
       if (channel.readyState === 'open') {
-        channel.send(payload)
+        try {
+          channel.send(payload)
+        } catch (error) {
+          console.warn('Failed to send room-locked notice to a peer', error)
+        }
       }
     }
   }
@@ -406,6 +418,10 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
   private setConnectionState(state: ConnectionState): void {
     this.connectionState = state
     this.emit('connection-state-change', state)
+  }
+
+  private emitNegotiationError(error: unknown): void {
+    this.emit('error', error instanceof Error ? error : new Error('WebRTC negotiation failed'))
   }
 
   private send(message: SignalMessage): void {
@@ -425,7 +441,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
         this.selfId = message['peerId'] as string
         const existingPeers = (message['existingPeers'] as string[]) ?? []
         for (const remoteId of existingPeers) {
-          void this.initiateOffer(remoteId)
+          this.initiateOffer(remoteId).catch((error: unknown) => this.emitNegotiationError(error))
         }
         this.pendingConnectResolve?.()
         this.pendingConnectResolve = null
@@ -450,12 +466,13 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
         break
       }
       case 'offer':
-        void this.handleOffer(message.from as string, message['sdp'] as RTCSessionDescriptionInit)
+        this.handleOffer(message.from as string, message['sdp'] as RTCSessionDescriptionInit).catch(
+          (error: unknown) => this.emitNegotiationError(error),
+        )
         break
       case 'answer':
-        void this.handleAnswer(
-          message.from as string,
-          message['sdp'] as RTCSessionDescriptionInit,
+        this.handleAnswer(message.from as string, message['sdp'] as RTCSessionDescriptionInit).catch(
+          (error: unknown) => this.emitNegotiationError(error),
         )
         break
       case 'ice-candidate':
@@ -585,6 +602,9 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     if (!this.audioContext) {
       this.audioContext = new AudioContext()
     }
+    if (this.audioContext.state === 'suspended') {
+      void this.audioContext.resume?.()
+    }
 
     const source = this.audioContext.createMediaStreamSource(stream)
     const gainNode = this.audioContext.createGain()
@@ -637,6 +657,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
       this.dataChannels.delete(peerId)
     }
     this.gainNodes.delete(peerId)
+    this.peerVolumes.delete(peerId)
 
     const vad = this.vadProcessors.get(peerId)
     if (vad) {

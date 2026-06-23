@@ -5,6 +5,7 @@ import type { RecentRoom } from '../types'
 const RECENT_ROOMS_KEY = 'wisp-recent-rooms'
 const MAX_RECENT_ROOMS = 5
 const ROOM_CODE_PATTERN = /^[A-Za-z0-9]{6}$/
+const CREATE_ROOM_TIMEOUT_MS = 10000
 
 let engineInstance: WispVoiceEngine | null = null
 
@@ -26,12 +27,16 @@ function signalingHttpUrl(): string {
 
 export async function createRoom(): Promise<string> {
   const baseUrl = signalingHttpUrl()
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), CREATE_ROOM_TIMEOUT_MS)
 
   let response: Response
   try {
-    response = await fetch(`${baseUrl}/room`, { method: 'POST' })
+    response = await fetch(`${baseUrl}/room`, { method: 'POST', signal: controller.signal })
   } catch {
     throw new Error('Unable to create a room. Check your internet connection and try again.')
+  } finally {
+    clearTimeout(timeoutId)
   }
 
   if (!response.ok) {
@@ -81,10 +86,18 @@ export function getRecentRooms(): RecentRoom[] {
 export function saveRecentRoom(room: RecentRoom): void {
   const existing = getRecentRooms().filter((entry) => entry.code !== room.code)
   const updated = [room, ...existing].slice(0, MAX_RECENT_ROOMS)
-  localStorage.setItem(RECENT_ROOMS_KEY, JSON.stringify(updated))
+  try {
+    localStorage.setItem(RECENT_ROOMS_KEY, JSON.stringify(updated))
+  } catch {
+    // localStorage unavailable or full; recent-room persistence is best-effort
+  }
 }
 
 export function removeRecentRoom(code: string): void {
   const updated = getRecentRooms().filter((entry) => entry.code !== code)
-  localStorage.setItem(RECENT_ROOMS_KEY, JSON.stringify(updated))
+  try {
+    localStorage.setItem(RECENT_ROOMS_KEY, JSON.stringify(updated))
+  } catch {
+    // localStorage unavailable or full; recent-room persistence is best-effort
+  }
 }

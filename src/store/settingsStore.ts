@@ -105,6 +105,16 @@ export const useSettingsStore = create<SettingsState>()(
           return { soundboardFiles }
         }),
     }),
-    { name: 'wisp-settings' },
+    {
+      name: 'wisp-settings',
+      merge: (persistedState, currentState) => {
+        const persisted = (persistedState ?? {}) as Partial<SettingsState>
+        return {
+          ...currentState,
+          ...persisted,
+          hotkeys: { ...currentState.hotkeys, ...(persisted.hotkeys ?? {}) },
+        }
+      },
+    },
   ),
 )
