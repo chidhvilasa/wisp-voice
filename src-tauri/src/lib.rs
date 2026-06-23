@@ -1,6 +1,9 @@
 mod commands;
 
+use commands::hotkeys::register_hotkeys;
 use commands::overlay::{get_overlay_position, hide_overlay, set_overlay_position, show_overlay};
+use commands::tray::{setup_tray, update_tray_icon};
+use tauri::Manager;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -14,12 +17,19 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_log::Builder::new().build())
+        .setup(|app| {
+            let handle = app.handle().clone();
+            setup_tray(handle.clone())?;
+            register_hotkeys(handle);
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             greet,
             show_overlay,
             hide_overlay,
             set_overlay_position,
-            get_overlay_position
+            get_overlay_position,
+            update_tray_icon
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -301,6 +301,15 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     this.duckAmount = amount
   }
 
+  sendRoomLocked(): void {
+    const payload = JSON.stringify({ type: 'room-locked' })
+    for (const channel of this.dataChannels.values()) {
+      if (channel.readyState === 'open') {
+        channel.send(payload)
+      }
+    }
+  }
+
   private startStatsLoop(): void {
     if (this.statsIntervalId !== null) return
     this.statsIntervalId = setInterval(() => {

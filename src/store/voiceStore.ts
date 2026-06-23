@@ -18,6 +18,7 @@ interface VoiceState {
   peers: Map<string, Peer>
   localMuted: boolean
   localDeafened: boolean
+  localSpeaking: boolean
   connectionState: ConnectionState
   chatMessages: ChatMessage[]
   setRoomCode: (roomCode: string) => void
@@ -26,6 +27,7 @@ interface VoiceState {
   removePeer: (peerId: string) => void
   setLocalMuted: (muted: boolean) => void
   setLocalDeafened: (deafened: boolean) => void
+  setLocalSpeaking: (speaking: boolean) => void
   setConnectionState: (state: ConnectionState) => void
   addChatMessage: (message: ChatMessage) => void
   reset: () => void
@@ -37,6 +39,7 @@ const initialState = {
   peers: new Map<string, Peer>(),
   localMuted: false,
   localDeafened: false,
+  localSpeaking: false,
   connectionState: 'idle' as ConnectionState,
   chatMessages: [] as ChatMessage[],
 }
@@ -74,6 +77,8 @@ export const useVoiceStore = create<VoiceState>((set) => ({
   },
 
   setLocalDeafened: (deafened) => set({ localDeafened: deafened }),
+
+  setLocalSpeaking: (speaking) => set({ localSpeaking: speaking }),
 
   setConnectionState: (connectionState) => set({ connectionState }),
 
