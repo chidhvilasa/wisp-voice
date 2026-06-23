@@ -29,6 +29,7 @@ Text: #F4F4F5 / #A1A1AA
 Font: Inter
 
 ## Phase 2 - Signaling server
+DONE - signaling server at /server
 Cloudflare Workers + Durable Objects in /server directory
 - POST /room returns 6-char room code
 - WS /room/:code/ws for WebSocket connections

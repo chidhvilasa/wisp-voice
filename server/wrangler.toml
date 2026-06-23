@@ -1,0 +1,11 @@
+name = "wisp-signaling"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[[durable_objects.bindings]]
+name = "WISP_ROOM"
+class_name = "WispRoom"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["WispRoom"]
