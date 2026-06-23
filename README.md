@@ -6,6 +6,29 @@ Wisp is a lightweight, desktop-only voice chat app built for gamers. It is a rea
 
 [![CI](https://github.com/chidhvilasa/wisp-voice/actions/workflows/ci.yml/badge.svg)](https://github.com/chidhvilasa/wisp-voice/actions/workflows/ci.yml)
 
+## Download
+
+[![Windows](https://img.shields.io/github/v/release/chidhvilasa/wisp-voice?label=Windows&logo=windows&style=flat-square)](https://github.com/chidhvilasa/wisp-voice/releases/latest)
+[![macOS](https://img.shields.io/github/v/release/chidhvilasa/wisp-voice?label=macOS&logo=apple&style=flat-square)](https://github.com/chidhvilasa/wisp-voice/releases/latest)
+[![Linux](https://img.shields.io/github/v/release/chidhvilasa/wisp-voice?label=Linux&logo=linux&style=flat-square)](https://github.com/chidhvilasa/wisp-voice/releases/latest)
+
+Grab the `.msi`/`.exe` (Windows), `.dmg` (macOS), or `.AppImage`/`.deb` (Linux) from the [latest release](https://github.com/chidhvilasa/wisp-voice/releases/latest).
+
+## Architecture
+
+```
+   Client A  <==== WebRTC P2P (DTLS-SRTP voice + data) ====>  Client B
+       \                                                        /
+        \--- WebSocket (signaling only) ---\  /--- WebSocket ---/
+                                             v  v
+                                  Cloudflare Workers
+                                  (Durable Object, ephemeral relay)
+```
+
+- **Voice and chat data** flow directly peer-to-peer over WebRTC once connected; the relay never sees decrypted audio.
+- **Signaling** (SDP/ICE exchange, room membership) goes through a Cloudflare Worker over WebSocket — it brokers the handshake and stores no persistent data.
+- **TURN fallback** (openrelay.metered.ca, free tier) is used only when a direct P2P path can't be established.
+
 ## Tech Stack
 
 | Layer | Choice |
@@ -21,12 +44,14 @@ Wisp is a lightweight, desktop-only voice chat app built for gamers. It is a rea
 | Logging | tauri-plugin-log |
 | Testing | Vitest |
 
-## Resource Usage (target)
+## Performance
 
-| | Wisp (target) | Discord |
-|---|---|---|
-| RAM (idle) | < 50 MB | ~400 MB |
-| CPU (idle) | < 1% | 3-8% |
+| | Target | Measured | Discord |
+|---|---|---|---|
+| RAM (idle) | < 50 MB | TBD — pending first real Tauri build | ~400 MB |
+| CPU (idle) | < 1% | TBD — pending first real Tauri build | 3-8% |
+
+Targets are design goals based on Tauri's native-webview architecture (no bundled Chromium). Measured values will be filled in after the first Rust-compiled release build is profiled on real hardware.
 
 ## Project Structure
 

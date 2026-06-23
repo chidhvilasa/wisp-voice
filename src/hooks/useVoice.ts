@@ -2,12 +2,10 @@ import { useCallback, useEffect, useRef } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { destroyVoiceEngine, getVoiceEngine } from '../lib/rooms'
+import { createReconnectScheduler } from '../lib/reconnect'
 import { useVoiceStore } from '../store/voiceStore'
 import { useSettingsStore } from '../store/settingsStore'
 import type { ChatMessage, ConnectionState, Peer, PeerStats } from '../types'
-
-const RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000, 30000]
-const MAX_RECONNECT_ATTEMPTS = 5
 
 export interface UseVoiceResult {
   connect: (roomCode: string, displayName: string) => Promise<void>
@@ -32,8 +30,6 @@ function playSoundboardSlot(slot: number): void {
 
 export function useVoice(): UseVoiceResult {
   const engineRef = useRef(getVoiceEngine())
-  const reconnectAttemptsRef = useRef(0)
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastRoomRef = useRef<{ code: string; displayName: string } | null>(null)
   const overlayVisibleRef = useRef(false)
 
@@ -52,65 +48,40 @@ export function useVoice(): UseVoiceResult {
   const addChatMessage = useVoiceStore((state) => state.addChatMessage)
   const resetVoiceStore = useVoiceStore((state) => state.reset)
 
-  const clearReconnectTimer = useCallback(() => {
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current)
-      reconnectTimerRef.current = null
-    }
-  }, [])
-
-  const scheduleReconnect = useCallback(() => {
-    if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
-      setConnectionState('error')
-      return
-    }
-
-    const delay =
-      RECONNECT_DELAYS_MS[reconnectAttemptsRef.current] ??
-      RECONNECT_DELAYS_MS[RECONNECT_DELAYS_MS.length - 1]
-    reconnectAttemptsRef.current += 1
-
-    clearReconnectTimer()
-    reconnectTimerRef.current = setTimeout(() => {
-      const room = lastRoomRef.current
-      const engine = engineRef.current
-      if (!room || !engine) return
-
-      engine
-        .connect(room.code, room.displayName)
-        .then(() => {
-          reconnectAttemptsRef.current = 0
-        })
-        .catch(() => {
-          scheduleReconnect()
-        })
-    }, delay)
-  }, [clearReconnectTimer, setConnectionState])
+  const schedulerRef = useRef<ReturnType<typeof createReconnectScheduler> | null>(null)
+  if (!schedulerRef.current) {
+    schedulerRef.current = createReconnectScheduler(
+      () => {
+        const room = lastRoomRef.current
+        if (!room) return Promise.resolve()
+        return engineRef.current.connect(room.code, room.displayName)
+      },
+      () => setConnectionState('error'),
+    )
+  }
 
   const connect = useCallback(
     async (roomCode: string, displayName: string) => {
       lastRoomRef.current = { code: roomCode, displayName }
       setRoomCode(roomCode)
       setDisplayName(displayName)
-      clearReconnectTimer()
-      reconnectAttemptsRef.current = 0
+      schedulerRef.current?.reset()
 
       try {
         await engineRef.current.connect(roomCode, displayName)
       } catch {
-        scheduleReconnect()
+        schedulerRef.current?.scheduleReconnect()
       }
     },
-    [setRoomCode, setDisplayName, clearReconnectTimer, scheduleReconnect],
+    [setRoomCode, setDisplayName],
   )
 
   const disconnect = useCallback(() => {
-    clearReconnectTimer()
-    reconnectAttemptsRef.current = 0
+    schedulerRef.current?.reset()
     lastRoomRef.current = null
     engineRef.current.disconnect()
     resetVoiceStore()
-  }, [clearReconnectTimer, resetVoiceStore])
+  }, [resetVoiceStore])
 
   const toggleMute = useCallback(() => {
     const next = !localMuted
@@ -165,14 +136,13 @@ export function useVoice(): UseVoiceResult {
     const handleConnectionStateChange = (state: ConnectionState) => {
       setConnectionState(state)
       if (state === 'connected') {
-        reconnectAttemptsRef.current = 0
-        clearReconnectTimer()
+        schedulerRef.current?.reset()
         const { roomCode, displayName } = useVoiceStore.getState()
         if (roomCode) {
           lastRoomRef.current = { code: roomCode, displayName }
         }
       } else if (state === 'reconnecting') {
-        scheduleReconnect()
+        schedulerRef.current?.scheduleReconnect()
       }
     }
 
@@ -190,7 +160,7 @@ export function useVoice(): UseVoiceResult {
     }
 
     const handleError = () => {
-      scheduleReconnect()
+      schedulerRef.current?.scheduleReconnect()
     }
 
     engine.on('peer-joined', handlePeerJoined)
@@ -209,17 +179,10 @@ export function useVoice(): UseVoiceResult {
       engine.off('chat-message', handleChatMessage)
       engine.off('peer-stats', handlePeerStats)
       engine.off('error', handleError)
-      clearReconnectTimer()
+      schedulerRef.current?.cancel()
       destroyVoiceEngine()
     }
-  }, [
-    setPeer,
-    removePeer,
-    setConnectionState,
-    addChatMessage,
-    clearReconnectTimer,
-    scheduleReconnect,
-  ])
+  }, [setPeer, removePeer, setConnectionState, addChatMessage])
 
   useEffect(() => {
     const unsubscribe = useSettingsStore.subscribe((state, prevState) => {

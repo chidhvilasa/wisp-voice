@@ -218,7 +218,8 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
   }
 
   setPeerVolume(peerId: string, volume: number): void {
-    const clamped = Math.min(2, Math.max(0, volume))
+    const safeVolume = Number.isFinite(volume) ? volume : 1.0
+    const clamped = Math.min(2, Math.max(0, safeVolume))
     this.peerVolumes.set(peerId, clamped)
     const gainNode = this.gainNodes.get(peerId)
     if (gainNode && !this.deafened) {

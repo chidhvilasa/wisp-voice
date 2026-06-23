@@ -41,6 +41,7 @@
     "@types/simple-peer": "^9.11.9",
     "@vitejs/plugin-react": "^4.6.0",
     "@vitest/ui": "^4.1.9",
+    "jsdom": "^29.1.1",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
     "vitest": "^4.1.9"
