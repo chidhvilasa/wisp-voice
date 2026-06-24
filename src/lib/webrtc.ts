@@ -705,6 +705,10 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     if (this.speakingPeers.delete(peerId)) {
       this.audioPipeline.setDucked(this.speakingPeers.size > 0, this.duckAmount)
     }
+
+    if (this.connections.size === 0) {
+      this.stopStatsLoop()
+    }
   }
 
   private closeConnection(pc: RTCPeerConnection): void {

@@ -120,13 +120,13 @@ export default function Home() {
 
   return (
     <div className="relative flex h-screen w-screen flex-col items-center overflow-y-auto bg-background px-6 py-10 text-text-primary">
-      <div className="flex w-full max-w-[480px] flex-1 flex-col items-center justify-center">
-        <div className="mb-12 flex flex-col items-center gap-1">
-          <h1 className="text-[48px] font-bold leading-none text-accent">Wisp</h1>
-          <p className="text-base text-text-secondary">Voice that doesn&apos;t slow you down</p>
+      <div className="mx-auto flex w-full max-w-[440px] flex-1 flex-col items-center justify-center">
+        <div className="flex flex-col items-center gap-1">
+          <h1 className="text-[40px] font-bold leading-none text-accent">Wisp</h1>
+          <p className="mb-10 text-[15px] text-text-secondary">Voice that doesn&apos;t slow you down</p>
         </div>
 
-        <div className="flex w-full flex-col gap-4">
+        <div className="flex w-full flex-col gap-3">
           <div className="flex w-full flex-col gap-2">
             <label className="text-xs text-text-secondary" htmlFor="display-name">
               Display name
@@ -137,17 +137,17 @@ export default function Home() {
               onChange={(event) => setDisplayName(event.target.value)}
               placeholder="Your name"
               maxLength={32}
-              className="rounded-card border border-border bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-accent"
+              className="w-full rounded border border-white/10 bg-surface2 px-[14px] py-2.5 text-sm text-text-primary outline-none focus:border-accent"
             />
           </div>
 
-          <div className="w-full rounded-card border border-border bg-surface p-6">
+          <div className="w-full rounded-card border border-border bg-surface p-5">
             <h2 className="mb-3 text-sm font-semibold text-text-primary">Create Room</h2>
             <button
               type="button"
               onClick={handleCreateRoom}
               disabled={creating}
-              className="flex w-full items-center justify-center gap-2 rounded-card bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-60"
+              className="flex h-10 w-full items-center justify-center gap-2 rounded bg-accent text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-60"
             >
               {creating && <Loader2 className="h-4 w-4 animate-spin" />}
               {creating ? 'Creating...' : 'Create Room'}
@@ -156,7 +156,7 @@ export default function Home() {
             {createError && <p className="mt-2 text-xs text-muted">{createError}</p>}
 
             {createdCode && (
-              <div className="mt-3 flex items-center justify-between rounded-card bg-surface2 px-3 py-2">
+              <div className="mt-3 flex items-center justify-between rounded bg-surface2 px-3 py-2">
                 <span className="font-mono text-lg tracking-widest text-text-primary">{createdCode}</span>
                 <button
                   type="button"
@@ -170,7 +170,7 @@ export default function Home() {
             )}
           </div>
 
-          <div className="w-full rounded-card border border-border bg-surface p-6">
+          <div className="w-full rounded-card border border-border bg-surface p-5">
             <h2 className="mb-3 text-sm font-semibold text-text-primary">Join Room</h2>
             <div className="flex gap-2">
               <input
@@ -178,13 +178,13 @@ export default function Home() {
                 onChange={(event) => setJoinCode(event.target.value.toUpperCase().slice(0, 6))}
                 placeholder="ABC123"
                 maxLength={6}
-                className="flex-1 rounded-card border border-border bg-surface2 px-3 py-2 font-mono text-sm uppercase tracking-widest text-text-primary outline-none focus:border-accent"
+                className="flex-1 rounded border border-white/10 bg-surface2 px-[14px] py-2.5 font-mono text-sm uppercase tracking-widest text-text-primary outline-none focus:border-accent"
               />
               <button
                 type="button"
                 onClick={handleJoin}
                 disabled={joining}
-                className="rounded-card bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-60"
+                className="h-10 rounded bg-accent px-4 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-60"
               >
                 {joining ? 'Joining...' : 'Join'}
               </button>
@@ -192,7 +192,7 @@ export default function Home() {
             {joinError && <p className="mt-2 text-xs text-muted">{joinError}</p>}
           </div>
 
-          <div className="w-full rounded-card border border-border bg-surface p-6">
+          <div className="w-full rounded-card border border-border bg-surface p-5">
             <h2 className="mb-3 text-sm font-semibold text-text-primary">Recent Rooms</h2>
             {recentRooms.length === 0 ? (
               <p className="text-xs text-text-secondary">No recent rooms</p>

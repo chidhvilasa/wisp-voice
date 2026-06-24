@@ -6,13 +6,15 @@ Wisp is a lightweight, desktop-only voice chat app built for gamers. It is a rea
 
 [![CI](https://github.com/chidhvilasa/wisp-voice/actions/workflows/ci.yml/badge.svg)](https://github.com/chidhvilasa/wisp-voice/actions/workflows/ci.yml)
 
-## Download
+## Download Wisp
 
-[![Windows](https://img.shields.io/github/v/release/chidhvilasa/wisp-voice?label=Windows&logo=windows&style=flat-square)](https://github.com/chidhvilasa/wisp-voice/releases/latest)
-[![macOS](https://img.shields.io/github/v/release/chidhvilasa/wisp-voice?label=macOS&logo=apple&style=flat-square)](https://github.com/chidhvilasa/wisp-voice/releases/latest)
-[![Linux](https://img.shields.io/github/v/release/chidhvilasa/wisp-voice?label=Linux&logo=linux&style=flat-square)](https://github.com/chidhvilasa/wisp-voice/releases/latest)
+| Platform | Download |
+|---|---|
+| Windows | [wisp-voice_0.2.0_x64-setup.exe](https://github.com/chidhvilasa/wisp-voice/releases/latest) |
+| macOS | [wisp-voice_0.2.0_x64.dmg](https://github.com/chidhvilasa/wisp-voice/releases/latest) |
+| Linux | [wisp-voice_0.2.0_amd64.AppImage](https://github.com/chidhvilasa/wisp-voice/releases/latest) |
 
-Grab the `.msi`/`.exe` (Windows), `.dmg` (macOS), or `.AppImage`/`.deb` (Linux) from the [latest release](https://github.com/chidhvilasa/wisp-voice/releases/latest).
+> Built with Tauri v2. macOS and Linux builds are cross-compiled via GitHub Actions.
 
 ## Architecture
 

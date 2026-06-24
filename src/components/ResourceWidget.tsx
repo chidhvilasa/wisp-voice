@@ -58,11 +58,11 @@ export default function ResourceWidget() {
   if (!usage) return null
 
   return (
-    <div className="flex flex-col gap-0.5 rounded-full border border-border bg-surface/80 px-3 py-1.5 text-xs text-text-secondary backdrop-blur">
+    <div className="flex flex-col gap-0.5 rounded border border-border bg-surface px-3 py-2 text-[11px] text-text-secondary">
       <span className="font-medium text-text-primary">
         CPU {usage.cpu_percent.toFixed(1)}% · RAM {usage.ram_mb}MB
       </span>
-      <span className="text-[11px]">Discord ~400MB | Wisp {usage.ram_mb}MB</span>
+      <span>Discord ~400MB | Wisp {usage.ram_mb}MB</span>
     </div>
   )
 }

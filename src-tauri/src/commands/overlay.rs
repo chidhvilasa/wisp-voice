@@ -15,8 +15,11 @@ struct OverlayPosition {
 }
 
 fn overlay_window(app: &AppHandle) -> Result<WebviewWindow, String> {
-    app.get_webview_window(OVERLAY_WINDOW_LABEL)
-        .ok_or_else(|| "overlay window not found".to_string())
+    app.get_webview_window(OVERLAY_WINDOW_LABEL).ok_or_else(|| {
+        let message = "overlay window not found".to_string();
+        eprintln!("[wisp:overlay] {message}");
+        message
+    })
 }
 
 fn overlay_position_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -30,7 +33,22 @@ fn overlay_position_path(app: &AppHandle) -> Result<PathBuf, String> {
 #[tauri::command]
 pub fn show_overlay(app: AppHandle) -> Result<(), String> {
     let window = overlay_window(&app)?;
-    window.show().map_err(|e| e.to_string())
+
+    match window.url() {
+        Ok(mut url) => {
+            url.set_path("/index.html");
+            url.set_fragment(Some("/overlay"));
+            if let Err(e) = window.navigate(url) {
+                eprintln!("[wisp:overlay] failed to navigate overlay window: {e}");
+            }
+        }
+        Err(e) => eprintln!("[wisp:overlay] failed to resolve overlay window URL: {e}"),
+    }
+
+    window.show().map_err(|e| {
+        eprintln!("[wisp:overlay] failed to show overlay window: {e}");
+        e.to_string()
+    })
 }
 
 #[tauri::command]

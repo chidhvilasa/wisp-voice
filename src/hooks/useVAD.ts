@@ -3,8 +3,14 @@ import { VADProcessor } from '../lib/vad'
 import { useSettingsStore } from '../store/settingsStore'
 import { useVoiceStore } from '../store/voiceStore'
 
-export function useVAD(stream: MediaStream | null): boolean {
+export interface UseVADResult {
+  isSpeaking: boolean
+  analyser: AnalyserNode | null
+}
+
+export function useVAD(stream: MediaStream | null): UseVADResult {
   const [isSpeaking, setIsSpeaking] = useState(false)
+  const [analyser, setAnalyser] = useState<AnalyserNode | null>(null)
   const vadThreshold = useSettingsStore((state) => state.vadThreshold)
   const setLocalSpeaking = useVoiceStore((state) => state.setLocalSpeaking)
   const processorRef = useRef<VADProcessor | null>(null)
@@ -13,6 +19,7 @@ export function useVAD(stream: MediaStream | null): boolean {
     if (!stream) {
       setIsSpeaking(false)
       setLocalSpeaking(false)
+      setAnalyser(null)
       return
     }
 
@@ -26,6 +33,7 @@ export function useVAD(stream: MediaStream | null): boolean {
 
     processor.on('speaking', handleSpeaking)
     processor.init(stream)
+    setAnalyser(processor.getAnalyser())
 
     return () => {
       processor.off('speaking', handleSpeaking)
@@ -33,6 +41,7 @@ export function useVAD(stream: MediaStream | null): boolean {
       processorRef.current = null
       setIsSpeaking(false)
       setLocalSpeaking(false)
+      setAnalyser(null)
     }
     // vadThreshold intentionally omitted: the threshold-change effect below
     // updates the running processor without tearing down the audio graph.
@@ -43,5 +52,5 @@ export function useVAD(stream: MediaStream | null): boolean {
     processorRef.current?.setThreshold(vadThreshold)
   }, [vadThreshold])
 
-  return isSpeaking
+  return { isSpeaking, analyser }
 }

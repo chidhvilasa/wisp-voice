@@ -12,13 +12,15 @@ export default function Toggle({ checked, onChange, label }: ToggleProps) {
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-150"
-      style={{ backgroundColor: checked ? '#7C5CFC' : '#3F3F46' }}
+      className="relative inline-flex h-[22px] w-10 shrink-0 items-center rounded-[11px]"
+      style={{ backgroundColor: checked ? '#7C5CFC' : '#3F3F46', transition: 'all 150ms ease' }}
     >
       <span
-        className={`block h-5 w-5 rounded-full bg-white transition-transform duration-150 ${
-          checked ? 'translate-x-[22px]' : 'translate-x-0.5'
-        }`}
+        className="block h-[18px] w-[18px] rounded-full bg-white"
+        style={{
+          transform: checked ? 'translateX(18px)' : 'translateX(2px)',
+          transition: 'all 150ms ease',
+        }}
       />
     </button>
   )

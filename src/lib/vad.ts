@@ -43,6 +43,10 @@ export class VADProcessor extends EventEmitter<VADProcessorEvents> {
     this.thresholdDb = thresholdDb
   }
 
+  getAnalyser(): AnalyserNode | null {
+    return this.analyser
+  }
+
   init(stream: MediaStream): void {
     this.destroy()
 
@@ -66,9 +70,13 @@ export class VADProcessor extends EventEmitter<VADProcessorEvents> {
   }
 
   private tick = (time: number): void => {
-    if (time - this.lastAnalysisTime >= ANALYSIS_INTERVAL_MS) {
-      this.lastAnalysisTime = time
-      this.analyze()
+    if (
+      typeof document === 'undefined' || !document.hidden
+    ) {
+      if (time - this.lastAnalysisTime >= ANALYSIS_INTERVAL_MS) {
+        this.lastAnalysisTime = time
+        this.analyze()
+      }
     }
     this.rafId = raf(this.tick)
   }
