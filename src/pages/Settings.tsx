@@ -133,6 +133,10 @@ function AudioTab() {
   const audioDucking = useSettingsStore((state) => state.audioDucking)
   const duckAmount = useSettingsStore((state) => state.duckAmount)
   const vadThreshold = useSettingsStore((state) => state.vadThreshold)
+  const pushToTalkEnabled = useSettingsStore((state) => state.pushToTalkEnabled)
+  const pushToTalkKey = useSettingsStore((state) => state.pushToTalkKey)
+  const noiseGateEnabled = useSettingsStore((state) => state.noiseGateEnabled)
+  const noiseGateThreshold = useSettingsStore((state) => state.noiseGateThreshold)
 
   const setInputDevice = useSettingsStore((state) => state.setInputDevice)
   const setOutputDevice = useSettingsStore((state) => state.setOutputDevice)
@@ -143,6 +147,10 @@ function AudioTab() {
   const setAudioDucking = useSettingsStore((state) => state.setAudioDucking)
   const setDuckAmount = useSettingsStore((state) => state.setDuckAmount)
   const setVadThreshold = useSettingsStore((state) => state.setVadThreshold)
+  const setPushToTalkEnabled = useSettingsStore((state) => state.setPushToTalkEnabled)
+  const setPushToTalkKey = useSettingsStore((state) => state.setPushToTalkKey)
+  const setNoiseGateEnabled = useSettingsStore((state) => state.setNoiseGateEnabled)
+  const setNoiseGateThreshold = useSettingsStore((state) => state.setNoiseGateThreshold)
 
   const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([])
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([])
@@ -184,6 +192,19 @@ function AudioTab() {
             ))}
           </select>
         </Row>
+      </Section>
+
+      <Section title="Push-to-talk">
+        <Row label="Enable push-to-talk">
+          <Switch checked={pushToTalkEnabled} onCheckedChange={setPushToTalkEnabled} />
+        </Row>
+        {pushToTalkEnabled && (
+          <div className="animate-fade-scale-in border-l-2 border-accent/40 pl-4">
+            <Row label="Push-to-talk key">
+              <RebindPill value={pushToTalkKey} onChange={setPushToTalkKey} />
+            </Row>
+          </div>
+        )}
       </Section>
 
       <Section title="Quick settings">
@@ -228,6 +249,22 @@ function AudioTab() {
             <Row label="VAD sensitivity">
               <LSlider value={vadThreshold} min={-80} max={-20} suffix=" dB" onChange={setVadThreshold} />
             </Row>
+            <Row label="Noise gate">
+              <Switch checked={noiseGateEnabled} onCheckedChange={setNoiseGateEnabled} />
+            </Row>
+            {noiseGateEnabled && (
+              <div className="animate-fade-scale-in border-l-2 border-accent/40 pl-4">
+                <Row label="Noise gate threshold">
+                  <LSlider
+                    value={noiseGateThreshold}
+                    min={-80}
+                    max={-20}
+                    suffix=" dB"
+                    onChange={setNoiseGateThreshold}
+                  />
+                </Row>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -552,11 +589,11 @@ export default function Settings({ onClose }: SettingsProps) {
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         className={cn(
-          'w-[540px] max-w-[540px] max-h-[85vh] overflow-hidden rounded-2xl border border-border bg-surface p-0',
+          'flex w-[540px] max-w-[540px] max-h-[85vh] flex-col overflow-hidden rounded-2xl border border-border bg-surface p-0',
           'animate-fade-scale-in shadow-2xl',
         )}
       >
-        <header className="border-b border-border p-5 pb-4">
+        <header className="shrink-0 border-b border-border p-5 pb-4">
           <h2 className="mb-4 text-lg font-semibold">Settings</h2>
           <div className="flex items-center gap-3">
             <Avatar id={displayName || 'You'} name={displayName || 'You'} size={36} />
@@ -564,8 +601,12 @@ export default function Settings({ onClose }: SettingsProps) {
           </div>
         </header>
 
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Tab)}>
-          <TabsList className="h-auto w-full justify-start gap-1 rounded-none border-b border-border bg-transparent px-5">
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as Tab)}
+          className="min-h-0 flex-1 flex-col overflow-hidden"
+        >
+          <TabsList className="h-auto w-full shrink-0 justify-start gap-1 rounded-none border-b border-border bg-transparent px-5">
             {TABS.map((tab) => (
               <TabsTrigger
                 key={tab.id}
@@ -580,7 +621,7 @@ export default function Settings({ onClose }: SettingsProps) {
             ))}
           </TabsList>
 
-          <div className="max-h-[calc(85vh-180px)] overflow-y-auto px-5 py-5">
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
             <TabsContent value="audio" className="mt-0">
               <AudioTab />
             </TabsContent>

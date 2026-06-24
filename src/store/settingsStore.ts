@@ -29,6 +29,10 @@ interface SettingsState {
   audioDucking: boolean
   duckAmount: number
   vadThreshold: number
+  pushToTalkEnabled: boolean
+  pushToTalkKey: string
+  noiseGateEnabled: boolean
+  noiseGateThreshold: number
   overlayPosition: OverlayPosition
   overlayMode: OverlayMode
   overlayAutoHide: boolean
@@ -48,6 +52,10 @@ interface SettingsState {
   setAudioDucking: (enabled: boolean) => void
   setDuckAmount: (amount: number) => void
   setVadThreshold: (threshold: number) => void
+  setPushToTalkEnabled: (enabled: boolean) => void
+  setPushToTalkKey: (key: string) => void
+  setNoiseGateEnabled: (enabled: boolean) => void
+  setNoiseGateThreshold: (threshold: number) => void
   setOverlayPosition: (position: OverlayPosition) => void
   setOverlayMode: (mode: OverlayMode) => void
   setOverlayAutoHide: (enabled: boolean) => void
@@ -71,6 +79,10 @@ export const useSettingsStore = create<SettingsState>()(
       audioDucking: true,
       duckAmount: 0.2,
       vadThreshold: -50,
+      pushToTalkEnabled: false,
+      pushToTalkKey: 'Ctrl+Shift+Space',
+      noiseGateEnabled: false,
+      noiseGateThreshold: -50,
       overlayPosition: { x: 20, y: 20 },
       overlayMode: 'compact',
       overlayAutoHide: true,
@@ -90,6 +102,10 @@ export const useSettingsStore = create<SettingsState>()(
       setAudioDucking: (enabled) => set({ audioDucking: enabled }),
       setDuckAmount: (amount) => set({ duckAmount: amount }),
       setVadThreshold: (threshold) => set({ vadThreshold: threshold }),
+      setPushToTalkEnabled: (enabled) => set({ pushToTalkEnabled: enabled }),
+      setPushToTalkKey: (key) => set({ pushToTalkKey: key }),
+      setNoiseGateEnabled: (enabled) => set({ noiseGateEnabled: enabled }),
+      setNoiseGateThreshold: (threshold) => set({ noiseGateThreshold: threshold }),
       setOverlayPosition: (position) => set({ overlayPosition: position }),
       setOverlayMode: (mode) => set({ overlayMode: mode }),
       setOverlayAutoHide: (enabled) => set({ overlayAutoHide: enabled }),

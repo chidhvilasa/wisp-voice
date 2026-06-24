@@ -4,6 +4,13 @@ import type { ChatMessage, Peer } from "./types";
 import { Avatar } from "./Avatar";
 import { cn } from "@/lib/utils";
 
+const MAX_MESSAGE_LENGTH = 500;
+
+function sanitizeMessageText(text: string): string {
+  const stripped = text.replace(/<[^>]*>/g, "");
+  return stripped.length > MAX_MESSAGE_LENGTH ? `${stripped.slice(0, MAX_MESSAGE_LENGTH)}...` : stripped;
+}
+
 interface ChatPanelProps {
   open: boolean;
   onClose: () => void;
@@ -77,7 +84,7 @@ export function ChatPanel({ open, onClose, messages, onSend, self }: ChatPanelPr
                       isSelf ? "bg-accent text-primary-foreground" : "bg-surface2",
                     )}
                   >
-                    {m.text}
+                    {sanitizeMessageText(m.text)}
                   </div>
                 ))}
               </div>

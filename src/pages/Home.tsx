@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Copy, Share2, Ghost, Loader2, Check } from 'lucide-react'
-import { createRoom, getRecentRooms, joinRoom, saveRecentRoom } from '../lib/rooms'
+import { Copy, Share2, Ghost, Loader2, Check, X } from 'lucide-react'
+import { createRoom, getRecentRooms, joinRoom, removeRecentRoom, saveRecentRoom } from '../lib/rooms'
 import { useSettingsStore } from '../store/settingsStore'
 import { useVoiceStore } from '../store/voiceStore'
 import ResourceWidget from '../components/ResourceWidget'
@@ -41,9 +41,26 @@ export default function Home() {
   const [joinError, setJoinError] = useState<string | null>(null)
 
   const [recentRooms, setRecentRooms] = useState<RecentRoom[]>([])
+  const [removingCodes, setRemovingCodes] = useState<Record<string, 'fading' | 'collapsing'>>({})
 
   useEffect(() => {
     setRecentRooms(getRecentRooms())
+  }, [])
+
+  const handleDeleteRoom = useCallback((code: string) => {
+    setRemovingCodes((prev) => ({ ...prev, [code]: 'fading' }))
+    setTimeout(() => {
+      setRemovingCodes((prev) => ({ ...prev, [code]: 'collapsing' }))
+      setTimeout(() => {
+        removeRecentRoom(code)
+        setRecentRooms(getRecentRooms())
+        setRemovingCodes((prev) => {
+          const next = { ...prev }
+          delete next[code]
+          return next
+        })
+      }, 150)
+    }, 150)
   }, [])
 
   const handleCreateRoom = useCallback(async () => {
@@ -241,28 +258,51 @@ export default function Home() {
             </div>
           ) : (
             <ul className="space-y-2">
-              {recentRooms.map((room) => (
-                <li
-                  key={room.code}
-                  className="flex items-center justify-between rounded-lg p-2.5 hover:bg-surface2"
-                >
-                  <div>
-                    <div className="font-mono text-sm font-semibold tracking-wider">{room.code}</div>
-                    <div className="text-[11px] text-text-tertiary">
-                      {formatRelativeTime(room.lastUsed)} · {room.memberCount} member
-                      {room.memberCount === 1 ? '' : 's'}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void handleRejoin(room.code)}
-                    disabled={joining}
-                    className="rounded-md border border-border px-3 py-1.5 text-xs transition-colors hover:border-accent hover:text-accent disabled:opacity-60"
+              {recentRooms.map((room) => {
+                const removing = removingCodes[room.code]
+                return (
+                  <li
+                    key={room.code}
+                    className="group flex items-center justify-between overflow-hidden rounded-lg hover:bg-surface2"
+                    style={{
+                      opacity: removing ? 0 : 1,
+                      maxHeight: removing === 'collapsing' ? 0 : 56,
+                      paddingTop: removing === 'collapsing' ? 0 : 10,
+                      paddingBottom: removing === 'collapsing' ? 0 : 10,
+                      transition:
+                        removing === 'collapsing'
+                          ? 'opacity 150ms ease, max-height 150ms ease, padding 150ms ease'
+                          : 'opacity 150ms ease',
+                    }}
                   >
-                    Rejoin
-                  </button>
-                </li>
-              ))}
+                    <div className="px-2.5">
+                      <div className="font-mono text-sm font-semibold tracking-wider">{room.code}</div>
+                      <div className="text-[11px] text-text-tertiary">
+                        {formatRelativeTime(room.lastUsed)} · {room.memberCount} member
+                        {room.memberCount === 1 ? '' : 's'}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 px-2.5">
+                      <button
+                        type="button"
+                        onClick={() => void handleRejoin(room.code)}
+                        disabled={joining}
+                        className="rounded-md border border-border px-3 py-1.5 text-xs transition-colors hover:border-accent hover:text-accent disabled:opacity-60"
+                      >
+                        Rejoin
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteRoom(room.code)}
+                        aria-label="Remove from recent rooms"
+                        className="text-text-tertiary opacity-0 transition-opacity hover:text-muted-red group-hover:opacity-100"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </section>

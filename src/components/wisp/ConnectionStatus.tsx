@@ -1,15 +1,13 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import type { Peer } from "./types";
+import { useVoiceStore } from "@/store/voiceStore";
 
-interface Props {
-  peers: Peer[];
-  connected?: boolean;
-}
-
-export function ConnectionStatus({ peers, connected = true }: Props) {
+export function ConnectionStatus() {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
+
+  const connectionState = useVoiceStore((state) => state.connectionState);
+  const peers = useVoiceStore((state) => state.peers);
 
   React.useEffect(() => {
     function handler(e: MouseEvent) {
@@ -19,19 +17,42 @@ export function ConnectionStatus({ peers, connected = true }: Props) {
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
+  let dotColor = "bg-text-tertiary";
+  let label = "Not connected";
+  let pulsing = false;
+
+  if (connectionState === "connecting") {
+    dotColor = "bg-warning";
+    label = "Connecting...";
+    pulsing = true;
+  } else if (connectionState === "reconnecting") {
+    dotColor = "bg-warning";
+    label = "Reconnecting...";
+    pulsing = true;
+  } else if (connectionState === "error") {
+    dotColor = "bg-muted-red";
+    label = "Connection error";
+  } else if (connectionState === "connected") {
+    dotColor = "bg-speaking";
+    label =
+      peers.size === 0
+        ? "In room, waiting..."
+        : `Connected · ${peers.size} peer${peers.size === 1 ? "" : "s"}`;
+  }
+
   return (
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 rounded-full bg-surface2 hover:bg-surface3 px-3 py-1.5 text-xs font-medium transition-colors"
       >
-        <span
-          className={cn(
-            "h-2 w-2 rounded-full",
-            connected ? "bg-speaking animate-dot-pulse" : "bg-muted-red",
+        <span className="relative flex h-2 w-2 items-center justify-center">
+          {pulsing && (
+            <span className={cn("absolute h-2 w-2 rounded-full animate-connection-pulse", dotColor)} />
           )}
-        />
-        <span>{connected ? "Connected" : "Disconnected"}</span>
+          <span className={cn("relative h-2 w-2 rounded-full", dotColor)} />
+        </span>
+        <span>{label}</span>
       </button>
 
       {open && (
@@ -39,19 +60,23 @@ export function ConnectionStatus({ peers, connected = true }: Props) {
           <div className="text-[11px] uppercase tracking-wider text-text-tertiary mb-2">
             Peer latency
           </div>
-          <ul className="space-y-1.5">
-            {peers.filter((p) => !p.isSelf).map((p) => {
-              const ms = p.latencyMs ?? 50;
-              const color =
-                ms < 80 ? "text-speaking" : ms < 200 ? "text-warning" : "text-muted-red";
-              return (
-                <li key={p.id} className="flex items-center justify-between text-xs">
-                  <span className="truncate">{p.name}</span>
-                  <span className={cn("font-mono", color)}>{ms} ms</span>
-                </li>
-              );
-            })}
-          </ul>
+          {peers.size === 0 ? (
+            <div className="text-xs text-text-tertiary">No peers connected</div>
+          ) : (
+            <ul className="space-y-1.5">
+              {Array.from(peers.values()).map((p) => {
+                const ms = p.latencyMs ?? 0;
+                const color =
+                  ms < 80 ? "text-speaking" : ms <= 200 ? "text-warning" : "text-muted-red";
+                return (
+                  <li key={p.id} className="flex items-center justify-between text-xs">
+                    <span className="truncate">{p.name}</span>
+                    <span className={cn("font-mono", color)}>{ms} ms</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       )}
     </div>

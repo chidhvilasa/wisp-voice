@@ -37,6 +37,7 @@ export function useVoice(): UseVoiceResult {
   const connectionState = useVoiceStore((state) => state.connectionState)
   const localMuted = useVoiceStore((state) => state.localMuted)
   const localDeafened = useVoiceStore((state) => state.localDeafened)
+  const previousMutedState = useVoiceStore((state) => state.previousMutedState)
 
   const setRoomCode = useVoiceStore((state) => state.setRoomCode)
   const setDisplayName = useVoiceStore((state) => state.setDisplayName)
@@ -44,6 +45,7 @@ export function useVoice(): UseVoiceResult {
   const removePeer = useVoiceStore((state) => state.removePeer)
   const setLocalMuted = useVoiceStore((state) => state.setLocalMuted)
   const setLocalDeafened = useVoiceStore((state) => state.setLocalDeafened)
+  const setPreviousMutedState = useVoiceStore((state) => state.setPreviousMutedState)
   const setConnectionState = useVoiceStore((state) => state.setConnectionState)
   const addChatMessage = useVoiceStore((state) => state.addChatMessage)
   const resetVoiceStore = useVoiceStore((state) => state.reset)
@@ -92,8 +94,14 @@ export function useVoice(): UseVoiceResult {
   const toggleDeafen = useCallback(() => {
     const next = !localDeafened
     engineRef.current.setDeafened(next)
+    if (next) {
+      setPreviousMutedState(localMuted)
+      setLocalMuted(true)
+    } else {
+      setLocalMuted(previousMutedState)
+    }
     setLocalDeafened(next)
-  }, [localDeafened, setLocalDeafened])
+  }, [localDeafened, localMuted, previousMutedState, setLocalDeafened, setLocalMuted, setPreviousMutedState])
 
   const sendChat = useCallback(
     (content: string) => {

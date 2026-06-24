@@ -57,14 +57,16 @@ export default function MicMeter({ analyser, isMuted }: MicMeterProps) {
     }
   }, [analyser, isMuted])
 
-  if (isMuted) return null
+  if (isMuted || !analyser) return null
+
+  const displayLevel = Math.max(2, level)
 
   return (
     <div className="h-1 w-full overflow-hidden rounded-full bg-surface2">
       <div
         className="h-full rounded-full"
         style={{
-          width: `${level}%`,
+          width: `${displayLevel}%`,
           backgroundColor: '#22C55E',
           transition: 'width 80ms ease-out',
           boxShadow: isSpeaking ? '0 0 6px 1px #22C55E' : 'none',

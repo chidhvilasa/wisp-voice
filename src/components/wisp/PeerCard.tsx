@@ -9,9 +9,11 @@ interface PeerCardProps {
   peer: Peer;
   volume?: number;
   onVolumeChange?: (v: number) => void;
+  avatarSize?: 28 | 32 | 36 | 48 | 68 | 72 | 80 | 120;
+  className?: string;
 }
 
-export function PeerCard({ peer, volume = 100, onVolumeChange }: PeerCardProps) {
+export function PeerCard({ peer, volume = 100, onVolumeChange, avatarSize = 68, className }: PeerCardProps) {
   const [hovered, setHovered] = React.useState(false);
 
   return (
@@ -21,6 +23,7 @@ export function PeerCard({ peer, volume = 100, onVolumeChange }: PeerCardProps) 
       className={cn(
         "relative rounded-xl bg-surface border p-4 flex flex-col items-center gap-3 transition-colors",
         peer.isSelf ? "border-accent/60" : "border-border hover:border-border-hover",
+        className,
       )}
     >
       <div className="relative">
@@ -30,7 +33,7 @@ export function PeerCard({ peer, volume = 100, onVolumeChange }: PeerCardProps) 
             peer.speaking && "ring-2 ring-speaking shadow-[0_0_20px_-2px_var(--speaking)] animate-speaking-pulse",
           )}
         />
-        <Avatar id={peer.id} name={peer.name} size={68} />
+        <Avatar id={peer.id} name={peer.name} size={avatarSize} />
         {peer.muted && (
           <span className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full bg-muted-red text-white border-2 border-surface">
             <MicOff size={12} />

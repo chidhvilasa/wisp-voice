@@ -39,6 +39,18 @@ function signalFromQuality(quality: ConnectionQuality): 1 | 2 | 3 {
   return 1
 }
 
+interface GridConfig {
+  columns: string
+  maxWidth: number
+  avatarSize: 68 | 72 | 80
+}
+
+function getGridConfig(count: number): GridConfig {
+  if (count <= 2) return { columns: 'repeat(2, 1fr)', maxWidth: 720, avatarSize: 80 }
+  if (count === 3) return { columns: 'repeat(3, 1fr)', maxWidth: 900, avatarSize: 72 }
+  return { columns: 'repeat(2, 1fr)', maxWidth: 680, avatarSize: 68 }
+}
+
 export default function Room() {
   const { connect, disconnect, toggleMute, toggleDeafen, sendChat, setPeerVolume, connectionState, peers } =
     useVoice()
@@ -64,7 +76,7 @@ export default function Room() {
   const [showChat, setShowChat] = useState(false)
   const [showShare, setShowShare] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [linkCopied, setLinkCopied] = useState(false)
+  const [emptyStateCopied, setEmptyStateCopied] = useState(false)
   const [volumes, setVolumes] = useState<Record<string, number>>({})
 
   const handleCopyCode = useCallback(() => {
@@ -72,17 +84,17 @@ export default function Room() {
       .writeText(roomCode)
       .then(() => {
         setCopied(true)
-        setTimeout(() => setCopied(false), 1500)
+        setTimeout(() => setCopied(false), 2000)
       })
       .catch(() => {})
   }, [roomCode])
 
-  const handleCopyInviteLink = useCallback(() => {
+  const handleCopyEmptyState = useCallback(() => {
     void navigator.clipboard
-      .writeText(`Join my Wisp room with code: ${roomCode}`)
+      .writeText(roomCode)
       .then(() => {
-        setLinkCopied(true)
-        setTimeout(() => setLinkCopied(false), 1500)
+        setEmptyStateCopied(true)
+        setTimeout(() => setEmptyStateCopied(false), 2000)
       })
       .catch(() => {})
   }, [roomCode])
@@ -140,6 +152,9 @@ export default function Room() {
     [setPeerVolume],
   )
 
+  const alone = peers.length === 0
+  const gridConfig = getGridConfig(wispPeers.length)
+
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-bg text-text-primary">
       <div className="relative flex h-full w-full flex-1">
@@ -175,14 +190,15 @@ export default function Room() {
                 <ArrowLeft size={16} />
               </button>
               <div className="flex items-center gap-1.5">
-                <span className="font-mono text-sm font-semibold tracking-[0.2em]">{roomCode}</span>
+                <span className="font-mono text-sm font-semibold tracking-[0.15em] text-white">{roomCode}</span>
                 <button
                   type="button"
                   onClick={handleCopyCode}
                   aria-label="Copy room code"
-                  className="grid h-7 w-7 place-items-center rounded-md text-text-tertiary hover:bg-surface2 hover:text-text-primary"
+                  className="flex items-center gap-1 rounded-md px-1.5 py-1 text-text-tertiary hover:bg-surface2 hover:text-text-primary"
                 >
                   {copied ? <Check size={12} className="text-speaking" /> : <Copy size={12} />}
+                  {copied && <span className="text-[11px] text-speaking">Copied!</span>}
                 </button>
               </div>
 
@@ -190,16 +206,16 @@ export default function Room() {
                 <button
                   type="button"
                   onClick={() => setShowShare((prev) => !prev)}
-                  className="ml-2 rounded-md border border-border px-3 py-1.5 text-xs transition-colors hover:border-accent hover:text-accent"
+                  className="ml-2 rounded-full border border-border px-3 py-1.5 text-xs transition-colors hover:border-accent hover:text-accent"
                 >
-                  Invite Friends
+                  Invite
                 </button>
 
                 {showShare && (
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => setShowShare(false)} />
                     <div className="absolute left-0 top-full z-20 mt-2 w-64 rounded-card border border-border bg-surface p-4 shadow-lg">
-                      <p className="mb-2 text-xs text-text-secondary">Share this code with friends to join:</p>
+                      <p className="mb-2 text-xs text-text-secondary">Share this code with friends:</p>
                       <p className="mb-3 text-center text-2xl font-mono tracking-widest text-text-primary">
                         {roomCode}
                       </p>
@@ -209,14 +225,14 @@ export default function Room() {
                           onClick={handleCopyCode}
                           className="rounded-card bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover"
                         >
-                          {copied ? 'Copied!' : 'Copy code'}
+                          {copied ? 'Copied!' : 'Copy'}
                         </button>
                         <button
                           type="button"
-                          onClick={handleCopyInviteLink}
+                          onClick={() => setShowShare(false)}
                           className="rounded-card border border-border px-3 py-1.5 text-sm font-medium text-text-primary hover:bg-surface2"
                         >
-                          {linkCopied ? 'Copied!' : 'Copy invite link'}
+                          Close
                         </button>
                       </div>
                     </div>
@@ -226,7 +242,7 @@ export default function Room() {
             </div>
 
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-              <ConnectionStatus peers={wispPeers} connected={connectionState === 'connected'} />
+              <ConnectionStatus />
             </div>
 
             <div className="flex items-center gap-2">
@@ -256,16 +272,48 @@ export default function Room() {
 
           <div className="flex flex-1 overflow-hidden">
             <div className="grid flex-1 place-items-center overflow-y-auto p-8">
-              <div className="grid w-full max-w-[560px] grid-cols-2 gap-4">
-                {wispPeers.slice(0, 4).map((peer) => (
-                  <PeerCard
-                    key={peer.id}
-                    peer={peer}
-                    volume={volumes[peer.id] ?? 100}
-                    onVolumeChange={(v) => handleVolumeChange(peer.id, v)}
-                  />
-                ))}
-              </div>
+              {alone ? (
+                <div className="flex flex-col items-center gap-5">
+                  <div className="flex h-[320px] w-[320px] flex-col items-center justify-center gap-3 rounded-2xl border-2 border-accent/40 bg-surface p-6 animate-border-pulse-subtle">
+                    <Avatar id="self" name={selfName} size={120} />
+                    <span className="text-lg font-medium">{selfName}</span>
+                    <span className="text-sm text-text-tertiary">Waiting for friends to join...</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <span className="text-sm text-text-tertiary">Share your room code to invite friends</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-2xl font-bold tracking-[0.15em] text-accent">{roomCode}</span>
+                      <button
+                        type="button"
+                        onClick={handleCopyEmptyState}
+                        aria-label="Copy room code"
+                        className="grid h-8 w-8 place-items-center rounded-md text-text-tertiary hover:bg-surface2 hover:text-text-primary"
+                      >
+                        {emptyStateCopied ? <Check size={14} className="text-speaking" /> : <Copy size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="grid w-full gap-4"
+                  style={{
+                    gridTemplateColumns: gridConfig.columns,
+                    maxWidth: gridConfig.maxWidth,
+                    transition: 'grid-template-columns 300ms ease',
+                  }}
+                >
+                  {wispPeers.map((peer) => (
+                    <PeerCard
+                      key={peer.id}
+                      peer={peer}
+                      avatarSize={gridConfig.avatarSize}
+                      volume={volumes[peer.id] ?? 100}
+                      onVolumeChange={(v) => handleVolumeChange(peer.id, v)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
             <ChatPanel
               open={showChat}
@@ -276,9 +324,7 @@ export default function Room() {
             />
           </div>
 
-          <div className="px-4">
-            <MicMeter analyser={analyser} isMuted={localMuted} />
-          </div>
+          <MicMeter analyser={analyser} isMuted={localMuted} />
 
           <div
             className="relative flex h-16 items-center justify-center border-t border-border"

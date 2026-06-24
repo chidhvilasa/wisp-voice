@@ -34,6 +34,9 @@ const MAX_REMOTE_PEERS = 3
 const STATS_INTERVAL_MS = 2000
 const DATA_CHANNEL_LABEL = 'wisp-chat'
 const DEFAULT_DUCK_AMOUNT = 0.2
+const SIGNAL_RATE_LIMIT_MAX = 10
+const SIGNAL_RATE_LIMIT_WINDOW_MS = 1000
+const MAX_CHAT_LENGTH = 500
 
 interface SignalMessage {
   type: string
@@ -50,6 +53,11 @@ function classifyQuality(rttMs: number): ConnectionQuality {
   if (rttMs < 80) return 'good'
   if (rttMs <= 200) return 'ok'
   return 'poor'
+}
+
+function sanitizeChatText(text: string): string {
+  const stripped = text.replace(/<[^>]*>/g, '')
+  return stripped.length > MAX_CHAT_LENGTH ? `${stripped.slice(0, MAX_CHAT_LENGTH)}...` : stripped
 }
 
 function defaultSignalingUrl(): string {
@@ -77,6 +85,8 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
   private statsIntervalId: ReturnType<typeof setInterval> | null = null
   private muted = false
   private deafened = false
+  private previousMutedState = false
+  private sendTimestamps: number[] = []
   private echoCancellationEnabled = true
   private connectionState: ConnectionState = 'idle'
   private pendingConnectResolve: (() => void) | null = null
@@ -220,7 +230,16 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
   }
 
   setDeafened(deafened: boolean): void {
+    if (deafened === this.deafened) return
     this.deafened = deafened
+
+    if (deafened) {
+      this.previousMutedState = this.muted
+      this.setMuted(true)
+    } else {
+      this.setMuted(this.previousMutedState)
+    }
+
     for (const [peerId, gainNode] of this.gainNodes) {
       const volume = this.peerVolumes.get(peerId) ?? 1.0
       gainNode.gain.value = deafened ? 0 : volume
@@ -241,7 +260,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     const message: ChatMessage = {
       id: generateId(),
       from: fromName,
-      content,
+      content: sanitizeChatText(content),
       timestamp: Date.now(),
     }
     const payload = JSON.stringify({ type: 'chat', ...message })
@@ -443,6 +462,17 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
   }
 
   private send(message: SignalMessage): void {
+    const now = Date.now()
+    this.sendTimestamps = this.sendTimestamps.filter(
+      (timestamp) => now - timestamp < SIGNAL_RATE_LIMIT_WINDOW_MS,
+    )
+    if (this.sendTimestamps.length >= SIGNAL_RATE_LIMIT_MAX) {
+      if (import.meta.env.DEV) {
+        console.warn(`wisp: signaling rate limit exceeded, dropping message of type "${message.type}"`)
+      }
+      return
+    }
+    this.sendTimestamps.push(now)
     this.ws?.send(JSON.stringify(message))
   }
 
@@ -628,7 +658,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
       const chatMessage: ChatMessage = {
         id: (message['id'] as string) ?? generateId(),
         from: message['from'] as string,
-        content: message['content'] as string,
+        content: sanitizeChatText((message['content'] as string) ?? ''),
         timestamp: (message['timestamp'] as number) ?? Date.now(),
       }
       this.emit('chat-message', chatMessage)

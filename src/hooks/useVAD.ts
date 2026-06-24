@@ -33,7 +33,11 @@ export function useVAD(stream: MediaStream | null): UseVADResult {
 
     processor.on('speaking', handleSpeaking)
     processor.init(stream)
-    setAnalyser(processor.getAnalyser())
+    const analyserNode = processor.getAnalyser()
+    if (!analyserNode) {
+      console.warn('wisp: VADProcessor produced no analyser node after init')
+    }
+    setAnalyser(analyserNode)
 
     return () => {
       processor.off('speaking', handleSpeaking)
