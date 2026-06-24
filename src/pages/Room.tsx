@@ -13,12 +13,14 @@ import {
   Send,
   Loader2,
   Settings as SettingsIcon,
+  Share2,
   Unlock,
 } from 'lucide-react'
 import { useVoice } from '../hooks/useVoice'
 import { useVAD } from '../hooks/useVAD'
 import { useVoiceStore } from '../store/voiceStore'
 import { getVoiceEngine, lockRoom } from '../lib/rooms'
+import { getPeerColor } from '../lib/peerColor'
 import Settings from './Settings'
 import type { ConnectionQuality, Peer } from '../types'
 
@@ -64,40 +66,51 @@ interface PeerCardProps {
 
 function PeerCard({ member, onVolumeChange }: PeerCardProps) {
   const [volume, setVolume] = useState(100)
+  const avatarColor = member.isSelf ? '#7C5CFC' : getPeerColor(member.id)
+  const isSpeakingRing = member.speaking && !member.muted
 
   return (
-    <div className="group relative flex flex-col items-center justify-center gap-2 rounded-card border border-border bg-surface p-4">
-      <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-surface2 text-lg font-semibold text-text-primary">
-        <span
-          className={
-            member.speaking && !member.muted
-              ? 'absolute inset-[-4px] rounded-full animate-[wisp-pulse_1.2s_ease-in-out_infinite]'
-              : 'absolute inset-[-4px] rounded-full opacity-0'
-          }
-        />
-        {member.muted ? (
-          <MicOff className="relative h-6 w-6 text-muted" />
-        ) : (
-          <span className="relative">{initial(member.name)}</span>
-        )}
+    <div
+      className={`group relative flex aspect-square flex-col items-center justify-center gap-2 rounded-card border bg-surface p-4 ${
+        member.isSelf ? 'border-accent/50' : 'border-border'
+      }`}
+    >
+      <div
+        className={`relative flex h-16 w-16 items-center justify-center rounded-full text-lg font-semibold text-white ${
+          isSpeakingRing ? 'animate-[wisp-pulse_1.2s_ease-in-out_infinite]' : ''
+        }`}
+        style={{
+          backgroundColor: avatarColor,
+          boxShadow: isSpeakingRing ? '0 0 0 3px #22C55E' : undefined,
+        }}
+      >
+        <span>{initial(member.name)}</span>
         {member.deafened && (
-          <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-muted">
+          <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-muted ring-2 ring-surface">
             <HeadphoneOff className="h-3 w-3 text-white" />
           </span>
         )}
       </div>
 
-      <span className="text-sm font-medium text-text-primary">
+      <span className="w-full truncate text-center text-sm font-medium text-text-primary">
         {member.name || 'Unknown'}
         {member.isSelf && <span className="text-text-secondary"> (You)</span>}
       </span>
 
-      {!member.isSelf && (
-        <div className="flex items-center gap-1.5">
-          <SignalBars quality={member.quality} />
-          <span className="text-[11px] text-text-secondary">{member.latencyMs}ms</span>
-        </div>
-      )}
+      <div className="flex items-center gap-2 text-text-secondary">
+        {member.muted ? (
+          <MicOff className="h-3.5 w-3.5 text-muted" />
+        ) : (
+          <Mic className="h-3.5 w-3.5 text-speaking" />
+        )}
+        {member.deafened ? (
+          <HeadphoneOff className="h-3.5 w-3.5 text-muted" />
+        ) : (
+          <Headphones className="h-3.5 w-3.5" />
+        )}
+        {!member.isSelf && <SignalBars quality={member.quality} />}
+        {!member.isSelf && <span className="text-[11px]">{member.latencyMs}ms</span>}
+      </div>
 
       {!member.isSelf && onVolumeChange && (
         <div className="absolute inset-x-3 bottom-1 hidden group-hover:block">
@@ -142,8 +155,10 @@ export default function Room() {
   const [locked, setLocked] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showChat, setShowChat] = useState(false)
+  const [showShare, setShowShare] = useState(false)
   const [chatInput, setChatInput] = useState('')
   const [copied, setCopied] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
 
   const chatEndRef = useRef<HTMLDivElement | null>(null)
 
@@ -157,6 +172,16 @@ export default function Room() {
       .then(() => {
         setCopied(true)
         setTimeout(() => setCopied(false), 1500)
+      })
+      .catch(() => {})
+  }, [roomCode])
+
+  const handleCopyInviteLink = useCallback(() => {
+    void navigator.clipboard
+      .writeText(`Join my Wisp room with code: ${roomCode}`)
+      .then(() => {
+        setLinkCopied(true)
+        setTimeout(() => setLinkCopied(false), 1500)
       })
       .catch(() => {})
   }, [roomCode])
@@ -205,9 +230,11 @@ export default function Room() {
     })),
   ]
 
+  const toolbarButton = 'flex h-12 w-12 items-center justify-center rounded-full transition-colors duration-150'
+
   return (
     <div className="relative flex h-screen w-screen overflow-hidden bg-background text-text-primary">
-      <div className="flex flex-1 flex-col">
+      <div className="flex h-full w-full flex-1 flex-col">
         {connectionState === 'reconnecting' && (
           <div className="flex items-center justify-center gap-2 bg-warning/20 px-4 py-2 text-sm text-warning">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -229,16 +256,56 @@ export default function Room() {
         )}
 
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-sm tracking-widest text-text-primary">{roomCode}</span>
+          <div className="flex items-center gap-3">
+            <span className="text-2xl font-mono tracking-widest text-text-primary">{roomCode}</span>
             <button
               type="button"
               onClick={handleCopyCode}
               aria-label="Copy room code"
-              className="rounded p-1 text-text-secondary hover:text-text-primary"
+              className="rounded p-1.5 text-text-secondary hover:text-text-primary"
             >
               {copied ? <Check className="h-4 w-4 text-speaking" /> : <Copy className="h-4 w-4" />}
             </button>
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowShare((prev) => !prev)}
+                aria-label="Share room code"
+                className="flex items-center gap-1.5 rounded-card border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:text-text-primary"
+              >
+                <Share2 className="h-3.5 w-3.5" />
+                Share
+              </button>
+
+              {showShare && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowShare(false)} />
+                  <div className="absolute left-0 top-full z-20 mt-2 w-64 rounded-card border border-border bg-surface p-4 shadow-lg">
+                    <p className="mb-2 text-xs text-text-secondary">Share this code with friends to join:</p>
+                    <p className="mb-3 text-center text-2xl font-mono tracking-widest text-text-primary">
+                      {roomCode}
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCopyCode}
+                        className="rounded-card bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover"
+                      >
+                        {copied ? 'Copied!' : 'Copy code'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCopyInviteLink}
+                        className="rounded-card border border-border px-3 py-1.5 text-sm font-medium text-text-primary hover:bg-surface2"
+                      >
+                        {linkCopied ? 'Copied!' : 'Copy invite link'}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           {isHost && (
@@ -253,20 +320,20 @@ export default function Room() {
           )}
         </div>
 
-        <div className="grid flex-1 grid-cols-2 grid-rows-2 place-content-center gap-4 p-6">
-          {members.slice(0, 4).map((member) => (
-            <PeerCard key={member.id} member={member} onVolumeChange={setPeerVolume} />
-          ))}
+        <div className="flex flex-1 items-center justify-center p-6">
+          <div className="grid w-full max-w-[600px] grid-cols-2 gap-4">
+            {members.slice(0, 4).map((member) => (
+              <PeerCard key={member.id} member={member} onVolumeChange={setPeerVolume} />
+            ))}
+          </div>
         </div>
 
-        <div className="flex items-center justify-center gap-3 border-t border-border px-4 py-3">
+        <div className="flex h-16 w-full items-center justify-center gap-3 border-t border-border px-4">
           <button
             type="button"
             onClick={toggleMute}
             aria-label="Toggle mute"
-            className={`flex h-10 w-10 items-center justify-center rounded-full ${
-              localMuted ? 'bg-muted text-white' : 'bg-surface2 text-speaking'
-            }`}
+            className={`${toolbarButton} text-white ${localMuted ? 'bg-muted hover:bg-muted/80' : 'bg-surface hover:bg-surface2'}`}
           >
             {localMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
           </button>
@@ -275,9 +342,7 @@ export default function Room() {
             type="button"
             onClick={toggleDeafen}
             aria-label="Toggle deafen"
-            className={`flex h-10 w-10 items-center justify-center rounded-full ${
-              localDeafened ? 'bg-muted text-white' : 'bg-surface2 text-text-primary'
-            }`}
+            className={`${toolbarButton} text-white ${localDeafened ? 'bg-muted hover:bg-muted/80' : 'bg-surface hover:bg-surface2'}`}
           >
             {localDeafened ? <HeadphoneOff className="h-5 w-5" /> : <Headphones className="h-5 w-5" />}
           </button>
@@ -286,9 +351,7 @@ export default function Room() {
             type="button"
             onClick={() => setShowChat((prev) => !prev)}
             aria-label="Toggle chat"
-            className={`flex h-10 w-10 items-center justify-center rounded-full ${
-              showChat ? 'bg-accent text-white' : 'bg-surface2 text-text-primary'
-            }`}
+            className={`${toolbarButton} ${showChat ? 'bg-accent text-white' : 'bg-surface text-text-primary hover:bg-surface2'}`}
           >
             <MessageSquare className="h-5 w-5" />
           </button>
@@ -297,7 +360,7 @@ export default function Room() {
             type="button"
             onClick={() => setShowSettings(true)}
             aria-label="Open settings"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-surface2 text-text-primary"
+            className={`${toolbarButton} bg-surface text-text-primary hover:bg-surface2`}
           >
             <SettingsIcon className="h-5 w-5" />
           </button>
@@ -306,7 +369,7 @@ export default function Room() {
             type="button"
             onClick={handleLeave}
             aria-label="Leave room"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-white"
+            className={`${toolbarButton} bg-muted text-white hover:bg-muted/80`}
           >
             <LogOut className="h-5 w-5" />
           </button>

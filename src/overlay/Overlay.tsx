@@ -5,6 +5,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { currentMonitor, getCurrentWindow, PhysicalPosition } from '@tauri-apps/api/window'
 import { Lock, MicOff } from 'lucide-react'
 import { useSettingsStore } from '../store/settingsStore'
+import { getPeerColor } from '../lib/peerColor'
 import type { ConnectionQuality, Peer } from '../types'
 
 const SNAP_PADDING = 16
@@ -266,35 +267,38 @@ export default function Overlay() {
         style={containerStyle}
         onMouseDown={handleMouseDown}
       >
-        {members.map((member) => (
-          <div key={member.id} className="flex items-center gap-2 rounded-card bg-surface2/80 p-1.5">
-            <div className="relative flex h-8 w-8 items-center justify-center rounded-full bg-surface2 text-xs font-semibold text-text-primary">
-              {!member.isSelf && (
-                <span
-                  className={
-                    member.speaking && !member.muted
-                      ? 'absolute inset-[-3px] rounded-full animate-[wisp-pulse_1.2s_ease-in-out_infinite]'
-                      : 'absolute inset-[-3px] rounded-full opacity-0'
-                  }
-                />
-              )}
-              {member.muted ? (
-                <MicOff className="relative h-4 w-4 text-muted" />
-              ) : (
-                <span className="relative">{initials(member.name)}</span>
-              )}
+        {members.map((member) => {
+          const avatarColor = member.isSelf ? '#7C5CFC' : getPeerColor(member.id)
+          const isSpeakingRing = member.speaking && !member.muted
+          return (
+            <div key={member.id} className="flex items-center gap-2 rounded-card bg-surface2/80 p-1.5">
+              <div
+                className={`relative flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white ${
+                  isSpeakingRing ? 'animate-[wisp-pulse_1.2s_ease-in-out_infinite]' : ''
+                }`}
+                style={{
+                  backgroundColor: avatarColor,
+                  boxShadow: isSpeakingRing ? '0 0 0 3px #22C55E' : undefined,
+                }}
+              >
+                {member.muted ? (
+                  <MicOff className="h-4 w-4 text-white" />
+                ) : (
+                  <span>{initials(member.name)}</span>
+                )}
+              </div>
+              <div className="flex flex-1 flex-col overflow-hidden">
+                <span className="truncate text-xs font-medium text-text-primary">{member.name}</span>
+                {!member.isSelf && (
+                  <div className="flex items-center gap-1">
+                    <SignalBars quality={member.quality} />
+                    <span className="text-[10px] text-text-secondary">{member.latencyMs}ms</span>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="flex flex-1 flex-col overflow-hidden">
-              <span className="truncate text-xs font-medium text-text-primary">{member.name}</span>
-              {!member.isSelf && (
-                <div className="flex items-center gap-1">
-                  <SignalBars quality={member.quality} />
-                  <span className="text-[10px] text-text-secondary">{member.latencyMs}ms</span>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+          )
+        })}
         <Lock className="absolute bottom-1 right-1 h-2 w-2 text-text-secondary" />
       </div>
     )
@@ -306,26 +310,29 @@ export default function Overlay() {
       style={containerStyle}
       onMouseDown={handleMouseDown}
     >
-      {members.map((member) => (
-        <div
-          key={member.id}
-          className={
-            'relative flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-medium text-text-primary ' +
-            (member.muted
-              ? 'bg-muted'
-              : member.speaking
-                ? 'bg-speaking animate-[wisp-pulse_1.2s_ease-in-out_infinite]'
-                : 'bg-surface2')
-          }
-        >
-          {member.muted ? <MicOff className="h-3.5 w-3.5 text-white" /> : initials(member.name)}
-          {!member.isSelf && (
-            <span
-              className={`absolute -bottom-0.5 -right-0.5 h-[3px] w-[3px] rounded-full ${latencyDotClass(member.latencyMs)}`}
-            />
-          )}
-        </div>
-      ))}
+      {members.map((member) => {
+        const avatarColor = member.isSelf ? '#7C5CFC' : getPeerColor(member.id)
+        const isSpeakingRing = member.speaking && !member.muted
+        return (
+          <div
+            key={member.id}
+            className={`relative flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-medium text-white ${
+              isSpeakingRing ? 'animate-[wisp-pulse_1.2s_ease-in-out_infinite]' : ''
+            }`}
+            style={{
+              backgroundColor: member.muted ? '#EF4444' : avatarColor,
+              boxShadow: isSpeakingRing ? '0 0 0 3px #22C55E' : undefined,
+            }}
+          >
+            {member.muted ? <MicOff className="h-3.5 w-3.5 text-white" /> : initials(member.name)}
+            {!member.isSelf && (
+              <span
+                className={`absolute -bottom-0.5 -right-0.5 h-[3px] w-[3px] rounded-full ${latencyDotClass(member.latencyMs)}`}
+              />
+            )}
+          </div>
+        )
+      })}
       <Lock className="absolute bottom-1 right-1 h-2 w-2 text-text-secondary" />
     </div>
   )

@@ -122,8 +122,6 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
       this.outgoingStream = this.localStream
     }
 
-    this.startStatsLoop()
-
     return new Promise((resolve, reject) => {
       this.pendingConnectResolve = resolve
       this.pendingConnectReject = reject
@@ -153,10 +151,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
   }
 
   disconnect(): void {
-    if (this.statsIntervalId !== null) {
-      clearInterval(this.statsIntervalId)
-      this.statsIntervalId = null
-    }
+    this.stopStatsLoop()
 
     for (const channel of this.dataChannels.values()) {
       channel.close()
@@ -415,8 +410,20 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     }, STATS_INTERVAL_MS)
   }
 
+  private stopStatsLoop(): void {
+    if (this.statsIntervalId !== null) {
+      clearInterval(this.statsIntervalId)
+      this.statsIntervalId = null
+    }
+  }
+
   private setConnectionState(state: ConnectionState): void {
     this.connectionState = state
+    if (state === 'connected') {
+      this.startStatsLoop()
+    } else {
+      this.stopStatsLoop()
+    }
     this.emit('connection-state-change', state)
   }
 

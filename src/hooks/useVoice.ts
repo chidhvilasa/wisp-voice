@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
-import { destroyVoiceEngine, getVoiceEngine } from '../lib/rooms'
+import { getVoiceEngine } from '../lib/rooms'
 import { createReconnectScheduler } from '../lib/reconnect'
 import { useVoiceStore } from '../store/voiceStore'
 import { useSettingsStore } from '../store/settingsStore'
@@ -109,8 +109,12 @@ export function useVoice(): UseVoiceResult {
 
   useEffect(() => {
     const engine = engineRef.current
+    const debug = (event: string, ...details: unknown[]) => {
+      if (import.meta.env.DEV) console.error(`[wisp:engine] ${event}`, ...details)
+    }
 
     const handlePeerJoined = (peerId: string) => {
+      debug('peer-joined', peerId)
       setPeer({
         id: peerId,
         name: peerId,
@@ -123,10 +127,12 @@ export function useVoice(): UseVoiceResult {
     }
 
     const handlePeerLeft = (peerId: string) => {
+      debug('peer-left', peerId)
       removePeer(peerId)
     }
 
     const handleSpeaking = (peerId: string, isSpeaking: boolean) => {
+      debug('speaking', peerId, isSpeaking)
       const peer = useVoiceStore.getState().peers.get(peerId)
       if (peer) {
         setPeer({ ...peer, speaking: isSpeaking })
@@ -134,6 +140,7 @@ export function useVoice(): UseVoiceResult {
     }
 
     const handleConnectionStateChange = (state: ConnectionState) => {
+      debug('connection-state-change', state)
       setConnectionState(state)
       if (state === 'connected') {
         schedulerRef.current?.reset()
@@ -147,10 +154,12 @@ export function useVoice(): UseVoiceResult {
     }
 
     const handleChatMessage = (message: ChatMessage) => {
+      debug('chat-message', message)
       addChatMessage(message)
     }
 
     const handlePeerStats = (stats: Map<string, PeerStats>) => {
+      debug('peer-stats', stats)
       for (const [peerId, peerStats] of stats) {
         const peer = useVoiceStore.getState().peers.get(peerId)
         if (peer) {
@@ -159,7 +168,8 @@ export function useVoice(): UseVoiceResult {
       }
     }
 
-    const handleError = () => {
+    const handleError = (error: Error) => {
+      debug('error', error)
       schedulerRef.current?.scheduleReconnect()
     }
 
@@ -180,7 +190,6 @@ export function useVoice(): UseVoiceResult {
       engine.off('peer-stats', handlePeerStats)
       engine.off('error', handleError)
       schedulerRef.current?.cancel()
-      destroyVoiceEngine()
     }
   }, [setPeer, removePeer, setConnectionState, addChatMessage])
 

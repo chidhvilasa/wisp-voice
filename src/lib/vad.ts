@@ -4,17 +4,31 @@ export interface VADProcessorEvents {
   speaking: (isSpeaking: boolean) => void
 }
 
-const ANALYSIS_INTERVAL_MS = 50
+const ANALYSIS_INTERVAL_MS = 100
 const HYSTERESIS_MS = 200
 const DEFAULT_THRESHOLD_DB = -50
 const FFT_SIZE = 1024
+
+// requestAnimationFrame is throttled/paused by the browser/webview when the
+// window is hidden, unlike setInterval; fall back to setTimeout when it's
+// not available (e.g. the Node test environment).
+const raf: (callback: (time: number) => void) => number =
+  typeof requestAnimationFrame === 'function'
+    ? requestAnimationFrame
+    : (callback) => setTimeout(() => callback(Date.now()), 16) as unknown as number
+
+const caf: (handle: number) => void =
+  typeof cancelAnimationFrame === 'function'
+    ? cancelAnimationFrame
+    : (handle) => clearTimeout(handle as unknown as ReturnType<typeof setTimeout>)
 
 export class VADProcessor extends EventEmitter<VADProcessorEvents> {
   private thresholdDb: number
   private audioContext: AudioContext | null = null
   private analyser: AnalyserNode | null = null
   private source: MediaStreamAudioSourceNode | null = null
-  private intervalId: ReturnType<typeof setInterval> | null = null
+  private rafId: number | null = null
+  private lastAnalysisTime = 0
   private buffer: Float32Array | null = null
   private isSpeaking = false
   private aboveSince: number | null = null
@@ -46,8 +60,17 @@ export class VADProcessor extends EventEmitter<VADProcessorEvents> {
     this.isSpeaking = false
     this.aboveSince = null
     this.belowSince = null
+    this.lastAnalysisTime = 0
 
-    this.intervalId = setInterval(() => this.analyze(), ANALYSIS_INTERVAL_MS)
+    this.rafId = raf(this.tick)
+  }
+
+  private tick = (time: number): void => {
+    if (time - this.lastAnalysisTime >= ANALYSIS_INTERVAL_MS) {
+      this.lastAnalysisTime = time
+      this.analyze()
+    }
+    this.rafId = raf(this.tick)
   }
 
   private analyze(): void {
@@ -84,9 +107,9 @@ export class VADProcessor extends EventEmitter<VADProcessorEvents> {
   }
 
   destroy(): void {
-    if (this.intervalId !== null) {
-      clearInterval(this.intervalId)
-      this.intervalId = null
+    if (this.rafId !== null) {
+      caf(this.rafId)
+      this.rafId = null
     }
     if (this.source) {
       this.source.disconnect()

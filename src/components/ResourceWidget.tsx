@@ -13,6 +13,7 @@ export default function ResourceWidget() {
 
   useEffect(() => {
     let cancelled = false
+    let intervalId: ReturnType<typeof setInterval> | null = null
 
     const poll = async () => {
       try {
@@ -23,23 +24,45 @@ export default function ResourceWidget() {
       }
     }
 
-    void poll()
-    const intervalId = setInterval(() => void poll(), POLL_INTERVAL_MS)
+    const startPolling = () => {
+      if (intervalId !== null) return
+      void poll()
+      intervalId = setInterval(() => void poll(), POLL_INTERVAL_MS)
+    }
+
+    const stopPolling = () => {
+      if (intervalId !== null) {
+        clearInterval(intervalId)
+        intervalId = null
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopPolling()
+      } else {
+        startPolling()
+      }
+    }
+
+    if (!document.hidden) startPolling()
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
       cancelled = true
-      clearInterval(intervalId)
+      stopPolling()
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [])
 
   if (!usage) return null
 
   return (
-    <div className="flex flex-col gap-0.5 rounded-card border border-border bg-surface/80 px-3 py-2 text-[11px] text-text-secondary backdrop-blur">
+    <div className="flex flex-col gap-0.5 rounded-full border border-border bg-surface/80 px-3 py-1.5 text-xs text-text-secondary backdrop-blur">
       <span className="font-medium text-text-primary">
         CPU {usage.cpu_percent.toFixed(1)}% · RAM {usage.ram_mb}MB
       </span>
-      <span>Discord ~400MB | Wisp {usage.ram_mb}MB</span>
+      <span className="text-[11px]">Discord ~400MB | Wisp {usage.ram_mb}MB</span>
     </div>
   )
 }

@@ -6,6 +6,7 @@ import { Pencil, Play, Trash2, Upload, X } from 'lucide-react'
 import { useSettingsStore } from '../store/settingsStore'
 import { getInputDevices, getLabelOrDefault, getOutputDevices } from '../lib/devices'
 import ResourceWidget from '../components/ResourceWidget'
+import Toggle from '../components/Toggle'
 import packageJson from '../../package.json'
 import type { HotkeyMap } from '../types'
 
@@ -57,24 +58,6 @@ function comboFromEvent(event: KeyboardEvent): string | null {
   if (event.metaKey) parts.push('Meta')
   parts.push(event.key.length === 1 ? event.key.toUpperCase() : event.key)
   return parts.join('+')
-}
-
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (value: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={`relative h-5 w-9 rounded-full transition-colors ${checked ? 'bg-accent' : 'bg-surface2'}`}
-    >
-      <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
-          checked ? 'translate-x-[18px]' : 'translate-x-0.5'
-        }`}
-      />
-    </button>
-  )
 }
 
 function AudioTab() {
@@ -168,17 +151,17 @@ function AudioTab() {
 
       <div className="flex items-center justify-between">
         <span className="text-sm text-text-primary">Noise suppression</span>
-        <Toggle checked={noiseSuppression} onChange={setNoiseSuppression} />
+        <Toggle checked={noiseSuppression} onChange={setNoiseSuppression} label="Noise suppression" />
       </div>
 
       <div className="flex items-center justify-between">
         <span className="text-sm text-text-primary">Echo cancellation</span>
-        <Toggle checked={echoCancellation} onChange={setEchoCancellation} />
+        <Toggle checked={echoCancellation} onChange={setEchoCancellation} label="Echo cancellation" />
       </div>
 
       <div className="flex items-center justify-between">
         <span className="text-sm text-text-primary">Audio ducking</span>
-        <Toggle checked={audioDucking} onChange={setAudioDucking} />
+        <Toggle checked={audioDucking} onChange={setAudioDucking} label="Audio ducking" />
       </div>
 
       {audioDucking && (
@@ -250,7 +233,7 @@ function OverlayTab() {
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
         <span className="text-sm text-text-primary">Show overlay</span>
-        <Toggle checked={overlayVisible} onChange={handleToggleVisible} />
+        <Toggle checked={overlayVisible} onChange={handleToggleVisible} label="Show overlay" />
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -279,7 +262,7 @@ function OverlayTab() {
 
       <div className="flex items-center justify-between">
         <span className="text-sm text-text-primary">Auto-hide</span>
-        <Toggle checked={overlayAutoHide} onChange={setOverlayAutoHide} />
+        <Toggle checked={overlayAutoHide} onChange={setOverlayAutoHide} label="Auto-hide" />
       </div>
 
       <div className="flex flex-col gap-1.5">
