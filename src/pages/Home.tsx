@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Copy, Check, Loader2 } from 'lucide-react'
+import { Copy, Share2, Ghost, Loader2, Check } from 'lucide-react'
 import { createRoom, getRecentRooms, joinRoom, saveRecentRoom } from '../lib/rooms'
 import { useSettingsStore } from '../store/settingsStore'
 import { useVoiceStore } from '../store/voiceStore'
 import ResourceWidget from '../components/ResourceWidget'
+import { WispLogo } from '../components/wisp/WispLogo'
+import { Avatar } from '../components/wisp/Avatar'
+import { cn } from '../lib/utils'
 import type { RecentRoom } from '../types'
 
 const ROOM_CODE_PATTERN = /^[A-Za-z0-9]{6}$/
@@ -68,6 +71,11 @@ export default function Home() {
       .catch(() => {})
   }, [createdCode])
 
+  const handleShareCode = useCallback(() => {
+    if (!createdCode) return
+    void navigator.clipboard.writeText(createdCode).catch(() => {})
+  }, [createdCode])
+
   const enterRoom = useCallback(
     async (code: string) => {
       const isHost = createdCode !== null && code === createdCode
@@ -119,116 +127,150 @@ export default function Home() {
   )
 
   return (
-    <div className="relative flex h-screen w-screen flex-col items-center overflow-y-auto bg-background px-6 py-10 text-text-primary">
-      <div className="mx-auto flex w-full max-w-[440px] flex-1 flex-col items-center justify-center">
-        <div className="flex flex-col items-center gap-1">
-          <h1 className="text-[40px] font-bold leading-none text-accent">Wisp</h1>
-          <p className="mb-10 text-[15px] text-text-secondary">Voice that doesn&apos;t slow you down</p>
-        </div>
+    <main className="flex min-h-screen justify-center overflow-y-auto bg-bg px-6 py-10">
+      <div className="w-full max-w-[460px] space-y-6">
+        <header className="flex items-center justify-between">
+          <WispLogo />
+          <span className="rounded-full border border-border bg-surface2 px-2.5 py-1 text-[11px] text-text-tertiary">
+            v0.2.0
+          </span>
+        </header>
 
-        <div className="flex w-full flex-col gap-3">
-          <div className="flex w-full flex-col gap-2">
-            <label className="text-xs text-text-secondary" htmlFor="display-name">
-              Display name
-            </label>
+        <section className="flex items-center gap-3">
+          <Avatar id={displayName || 'You'} name={displayName || 'You'} size={36} />
+          <div className="flex-1">
             <input
-              id="display-name"
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
-              placeholder="Your name"
+              placeholder="Display name"
               maxLength={32}
-              className="w-full rounded border border-white/10 bg-surface2 px-[14px] py-2.5 text-sm text-text-primary outline-none focus:border-accent"
+              className="w-full border-b border-border bg-transparent py-1 text-base font-medium outline-none transition-colors focus:border-accent"
             />
+            <div className="mt-1 text-[11px] text-text-tertiary">Shown to others in your rooms</div>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-border bg-surface p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Create Room</h2>
+            <span className="rounded-full bg-surface2 px-2 py-0.5 text-[10px] uppercase tracking-wider text-text-tertiary">
+              Up to 4 people
+            </span>
           </div>
 
-          <div className="w-full rounded-card border border-border bg-surface p-5">
-            <h2 className="mb-3 text-sm font-semibold text-text-primary">Create Room</h2>
+          {!createdCode ? (
             <button
               type="button"
               onClick={handleCreateRoom}
               disabled={creating}
-              className="flex h-10 w-full items-center justify-center gap-2 rounded bg-accent text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent py-2.5 font-semibold text-primary-foreground transition-colors hover:bg-accent-hover disabled:opacity-60"
             >
               {creating && <Loader2 className="h-4 w-4 animate-spin" />}
-              {creating ? 'Creating...' : 'Create Room'}
+              {creating ? 'Creating...' : 'Create a new room'}
             </button>
-
-            {createError && <p className="mt-2 text-xs text-muted">{createError}</p>}
-
-            {createdCode && (
-              <div className="mt-3 flex items-center justify-between rounded bg-surface2 px-3 py-2">
-                <span className="font-mono text-lg tracking-widest text-text-primary">{createdCode}</span>
+          ) : (
+            <div className="space-y-3 animate-fade-scale-in">
+              <div className="rounded-lg bg-surface2 p-4 text-center">
+                <div className="mb-1 text-[10px] uppercase tracking-wider text-text-tertiary">Room code</div>
+                <div className="text-3xl font-mono font-bold tracking-[0.3em] text-accent">{createdCode}</div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={handleCopyCode}
-                  aria-label="Copy room code"
-                  className="rounded p-1 text-text-secondary transition-colors hover:text-text-primary"
+                  className="flex items-center justify-center gap-1.5 rounded-lg border border-border py-2 text-xs hover:border-border-hover"
                 >
-                  {copied ? <Check className="h-4 w-4 text-speaking" /> : <Copy className="h-4 w-4" />}
+                  {copied ? <Check className="h-3 w-3 text-speaking" /> : <Copy size={12} />} {copied ? 'Copied' : 'Copy'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleShareCode}
+                  className="flex items-center justify-center gap-1.5 rounded-lg border border-border py-2 text-xs hover:border-border-hover"
+                >
+                  <Share2 size={12} /> Share
                 </button>
               </div>
-            )}
-          </div>
-
-          <div className="w-full rounded-card border border-border bg-surface p-5">
-            <h2 className="mb-3 text-sm font-semibold text-text-primary">Join Room</h2>
-            <div className="flex gap-2">
-              <input
-                value={joinCode}
-                onChange={(event) => setJoinCode(event.target.value.toUpperCase().slice(0, 6))}
-                placeholder="ABC123"
-                maxLength={6}
-                className="flex-1 rounded border border-white/10 bg-surface2 px-[14px] py-2.5 font-mono text-sm uppercase tracking-widest text-text-primary outline-none focus:border-accent"
-              />
               <button
                 type="button"
-                onClick={handleJoin}
-                disabled={joining}
-                className="h-10 rounded bg-accent px-4 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-60"
+                onClick={() => void enterRoom(createdCode)}
+                className="w-full rounded-lg bg-accent py-2.5 font-semibold text-primary-foreground hover:bg-accent-hover"
               >
-                {joining ? 'Joining...' : 'Join'}
+                Enter Room
               </button>
+              <div className="text-center text-[11px] text-text-tertiary">
+                Share the code with your friends to invite them
+              </div>
             </div>
-            {joinError && <p className="mt-2 text-xs text-muted">{joinError}</p>}
-          </div>
+          )}
 
-          <div className="w-full rounded-card border border-border bg-surface p-5">
-            <h2 className="mb-3 text-sm font-semibold text-text-primary">Recent Rooms</h2>
-            {recentRooms.length === 0 ? (
-              <p className="text-xs text-text-secondary">No recent rooms</p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {recentRooms.map((room) => (
-                  <li
-                    key={room.code}
-                    className="flex items-center justify-between rounded-card bg-surface2 px-3 py-2"
-                  >
-                    <div className="flex flex-col">
-                      <span className="font-mono text-sm text-text-primary">{room.code}</span>
-                      <span className="text-[11px] text-text-secondary">
-                        {formatRelativeTime(room.lastUsed)} · {room.memberCount} member
-                        {room.memberCount === 1 ? '' : 's'}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => void handleRejoin(room.code)}
-                      disabled={joining}
-                      className="rounded px-3 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/10 disabled:opacity-60"
-                    >
-                      Rejoin
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+          {createError && <p className="mt-2 text-xs text-muted-red">{createError}</p>}
+        </section>
+
+        <section className="rounded-xl border border-border bg-surface p-5">
+          <h2 className="mb-3 text-sm font-semibold">Join Room</h2>
+          <div className="flex gap-2">
+            <input
+              value={joinCode}
+              onChange={(event) => setJoinCode(event.target.value.toUpperCase().slice(0, 6))}
+              onKeyDown={(event) => event.key === 'Enter' && void handleJoin()}
+              placeholder="ENTER CODE"
+              maxLength={6}
+              className={cn(
+                'flex-1 rounded-lg border bg-surface2 px-3 py-2 text-center font-mono tracking-[0.3em] outline-none',
+                joinError ? 'border-muted-red text-muted-red' : 'border-border focus:border-accent',
+              )}
+            />
+            <button
+              type="button"
+              onClick={() => void handleJoin()}
+              disabled={joining}
+              className="rounded-lg bg-accent px-5 font-semibold text-primary-foreground hover:bg-accent-hover disabled:opacity-60"
+            >
+              {joining ? 'Joining...' : 'Join'}
+            </button>
           </div>
-        </div>
+          {joinError && <div className="mt-2 text-xs text-muted-red">{joinError}</div>}
+        </section>
+
+        <section className="rounded-xl border border-border bg-surface p-5">
+          <h2 className="mb-3 text-sm font-semibold">Recent Rooms</h2>
+          {recentRooms.length === 0 ? (
+            <div className="space-y-2 py-6 text-center">
+              <Ghost size={28} className="mx-auto text-text-tertiary" />
+              <div className="text-xs text-text-tertiary">No recent rooms yet</div>
+            </div>
+          ) : (
+            <ul className="space-y-2">
+              {recentRooms.map((room) => (
+                <li
+                  key={room.code}
+                  className="flex items-center justify-between rounded-lg p-2.5 hover:bg-surface2"
+                >
+                  <div>
+                    <div className="font-mono text-sm font-semibold tracking-wider">{room.code}</div>
+                    <div className="text-[11px] text-text-tertiary">
+                      {formatRelativeTime(room.lastUsed)} · {room.memberCount} member
+                      {room.memberCount === 1 ? '' : 's'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleRejoin(room.code)}
+                    disabled={joining}
+                    className="rounded-md border border-border px-3 py-1.5 text-xs transition-colors hover:border-accent hover:text-accent disabled:opacity-60"
+                  >
+                    Rejoin
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
 
       <div className="fixed bottom-4 right-4">
         <ResourceWidget />
       </div>
-    </div>
+    </main>
   )
 }

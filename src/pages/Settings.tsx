@@ -1,12 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ChangeEvent } from 'react'
+import type { ChangeEvent, ReactNode } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { currentMonitor } from '@tauri-apps/api/window'
-import { Pencil, Play, Trash2, Upload, X } from 'lucide-react'
+import {
+  ChevronDown,
+  CornerDownLeft,
+  CornerDownRight,
+  CornerUpLeft,
+  CornerUpRight,
+  ExternalLink,
+  Ghost,
+  Lock,
+  Play,
+  Trash2,
+  Upload,
+} from 'lucide-react'
+import { Dialog, DialogContent } from '../components/ui/dialog'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
+import { Slider } from '../components/ui/slider'
+import { Switch } from '../components/ui/switch'
 import { useSettingsStore } from '../store/settingsStore'
 import { getInputDevices, getLabelOrDefault, getOutputDevices } from '../lib/devices'
 import ResourceWidget from '../components/ResourceWidget'
-import Toggle from '../components/Toggle'
+import { Avatar } from '../components/wisp/Avatar'
+import { RebindPill } from '../components/wisp/RebindPill'
+import { OverlayCompact, OverlayFull } from '../components/wisp/OverlayPreview'
+import { cn } from '../lib/utils'
 import packageJson from '../../package.json'
 import type { HotkeyMap } from '../types'
 
@@ -37,6 +56,13 @@ const SNAP_PADDING = 16
 
 type Corner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 
+const CORNERS: { key: Corner; icon: ReactNode; label: string }[] = [
+  { key: 'top-left', icon: <CornerUpLeft size={16} />, label: 'Top Left' },
+  { key: 'top-right', icon: <CornerUpRight size={16} />, label: 'Top Right' },
+  { key: 'bottom-left', icon: <CornerDownLeft size={16} />, label: 'Bottom Left' },
+  { key: 'bottom-right', icon: <CornerDownRight size={16} />, label: 'Bottom Right' },
+]
+
 function readFileAsBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -49,15 +75,52 @@ function readFileAsBase64(file: File): Promise<string> {
   })
 }
 
-function comboFromEvent(event: KeyboardEvent): string | null {
-  if (['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) return null
-  const parts: string[] = []
-  if (event.ctrlKey) parts.push('Ctrl')
-  if (event.shiftKey) parts.push('Shift')
-  if (event.altKey) parts.push('Alt')
-  if (event.metaKey) parts.push('Meta')
-  parts.push(event.key.length === 1 ? event.key.toUpperCase() : event.key)
-  return parts.join('+')
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="space-y-3">
+      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">{title}</h3>
+      <div className="space-y-3">{children}</div>
+    </div>
+  )
+}
+
+function Row({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className="text-sm">{label}</span>
+      <div className="flex items-center gap-3">{children}</div>
+    </div>
+  )
+}
+
+function LSlider({
+  value,
+  onChange,
+  min = 0,
+  max = 100,
+  suffix = '%',
+}: {
+  value: number
+  onChange: (v: number) => void
+  min?: number
+  max?: number
+  suffix?: string
+}) {
+  return (
+    <div className="flex w-[220px] items-center gap-3">
+      <Slider
+        value={[value]}
+        min={min}
+        max={max}
+        onValueChange={(v) => onChange(Array.isArray(v) ? v[0] ?? 0 : v)}
+        className="flex-1"
+      />
+      <span className="w-14 text-right font-mono text-xs text-text-secondary">
+        {value}
+        {suffix}
+      </span>
+    </div>
+  )
 }
 
 function AudioTab() {
@@ -83,6 +146,7 @@ function AudioTab() {
 
   const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([])
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([])
+  const [advOpen, setAdvOpen] = useState(false)
 
   useEffect(() => {
     void getInputDevices().then(setInputDevices)
@@ -90,112 +154,89 @@ function AudioTab() {
   }, [])
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs text-text-secondary">Input device</label>
-        <select
-          value={inputDevice}
-          onChange={(event) => setInputDevice(event.target.value)}
-          className="rounded-card border border-border bg-surface2 px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent"
+    <div className="space-y-6">
+      <Section title="Input / Output">
+        <Row label="Input device">
+          <select
+            value={inputDevice}
+            onChange={(event) => setInputDevice(event.target.value)}
+            className="rounded-md border border-border bg-surface2 px-3 py-1.5 text-xs outline-none focus:border-accent"
+          >
+            <option value="">System default</option>
+            {inputDevices.map((device, index) => (
+              <option key={device.deviceId} value={device.deviceId}>
+                {getLabelOrDefault(device, index)}
+              </option>
+            ))}
+          </select>
+        </Row>
+        <Row label="Output device">
+          <select
+            value={outputDevice}
+            onChange={(event) => setOutputDevice(event.target.value)}
+            className="rounded-md border border-border bg-surface2 px-3 py-1.5 text-xs outline-none focus:border-accent"
+          >
+            <option value="">System default</option>
+            {outputDevices.map((device, index) => (
+              <option key={device.deviceId} value={device.deviceId}>
+                {getLabelOrDefault(device, index)}
+              </option>
+            ))}
+          </select>
+        </Row>
+      </Section>
+
+      <Section title="Quick settings">
+        <Row label="Noise suppression">
+          <Switch checked={noiseSuppression} onCheckedChange={setNoiseSuppression} />
+        </Row>
+        <Row label="Echo cancellation">
+          <Switch checked={echoCancellation} onCheckedChange={setEchoCancellation} />
+        </Row>
+        <Row label="Audio ducking">
+          <Switch checked={audioDucking} onCheckedChange={setAudioDucking} />
+        </Row>
+        {audioDucking && (
+          <div className="animate-fade-scale-in border-l-2 border-accent/40 pl-4">
+            <Row label="Duck amount">
+              <LSlider value={Math.round(duckAmount * 100)} onChange={(v) => setDuckAmount(v / 100)} />
+            </Row>
+          </div>
+        )}
+      </Section>
+
+      <Section title="Volumes">
+        <Row label="Mic volume">
+          <LSlider value={Math.round(micVolume * 100)} max={200} onChange={(v) => setMicVolume(v / 100)} />
+        </Row>
+        <Row label="Output volume">
+          <LSlider value={Math.round(outputVolume * 100)} max={200} onChange={(v) => setOutputVolume(v / 100)} />
+        </Row>
+      </Section>
+
+      <div>
+        <button
+          type="button"
+          onClick={() => setAdvOpen((v) => !v)}
+          className="flex items-center gap-2 text-xs text-text-secondary hover:text-text-primary"
         >
-          <option value="">System default</option>
-          {inputDevices.map((device, index) => (
-            <option key={device.deviceId} value={device.deviceId}>
-              {getLabelOrDefault(device, index)}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs text-text-secondary">Output device</label>
-        <select
-          value={outputDevice}
-          onChange={(event) => setOutputDevice(event.target.value)}
-          className="rounded-card border border-border bg-surface2 px-2 py-1.5 text-sm text-text-primary outline-none focus:border-accent"
-        >
-          <option value="">System default</option>
-          {outputDevices.map((device, index) => (
-            <option key={device.deviceId} value={device.deviceId}>
-              {getLabelOrDefault(device, index)}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs text-text-secondary">Mic volume — {Math.round(micVolume * 100)}%</label>
-        <input
-          type="range"
-          min={0}
-          max={200}
-          value={Math.round(micVolume * 100)}
-          onChange={(event) => setMicVolume(Number(event.target.value) / 100)}
-          className="accent-accent"
-        />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs text-text-secondary">
-          Output volume — {Math.round(outputVolume * 100)}%
-        </label>
-        <input
-          type="range"
-          min={0}
-          max={200}
-          value={Math.round(outputVolume * 100)}
-          onChange={(event) => setOutputVolume(Number(event.target.value) / 100)}
-          className="accent-accent"
-        />
-      </div>
-
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-text-primary">Noise suppression</span>
-        <Toggle checked={noiseSuppression} onChange={setNoiseSuppression} label="Noise suppression" />
-      </div>
-
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-text-primary">Echo cancellation</span>
-        <Toggle checked={echoCancellation} onChange={setEchoCancellation} label="Echo cancellation" />
-      </div>
-
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-text-primary">Audio ducking</span>
-        <Toggle checked={audioDucking} onChange={setAudioDucking} label="Audio ducking" />
-      </div>
-
-      {audioDucking && (
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs text-text-secondary">
-            Duck amount — {Math.round(duckAmount * 100)}%
-          </label>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={Math.round(duckAmount * 100)}
-            onChange={(event) => setDuckAmount(Number(event.target.value) / 100)}
-            className="accent-accent"
-          />
-        </div>
-      )}
-
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs text-text-secondary">VAD sensitivity — {vadThreshold}dB</label>
-        <input
-          type="range"
-          min={-80}
-          max={-20}
-          value={vadThreshold}
-          onChange={(event) => setVadThreshold(Number(event.target.value))}
-          className="accent-accent"
-        />
+          <ChevronDown size={14} className={cn('transition-transform', advOpen && 'rotate-180')} />
+          Advanced
+        </button>
+        {advOpen && (
+          <div className="animate-fade-scale-in mt-4 space-y-3">
+            <Row label="VAD sensitivity">
+              <LSlider value={vadThreshold} min={-80} max={-20} suffix=" dB" onChange={setVadThreshold} />
+            </Row>
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
 function OverlayTab() {
+  const displayName = useSettingsStore((state) => state.displayName)
   const overlayMode = useSettingsStore((state) => state.overlayMode)
   const overlayAutoHide = useSettingsStore((state) => state.overlayAutoHide)
   const overlayOpacity = useSettingsStore((state) => state.overlayOpacity)
@@ -204,23 +245,24 @@ function OverlayTab() {
   const setOverlayOpacity = useSettingsStore((state) => state.setOverlayOpacity)
 
   const [overlayVisible, setOverlayVisible] = useState(false)
+  const [corner, setCorner] = useState<Corner>('top-right')
 
-  const handleToggleVisible = useCallback(() => {
-    const next = !overlayVisible
+  const handleToggleVisible = useCallback((next: boolean) => {
     setOverlayVisible(next)
     void invoke(next ? 'show_overlay' : 'hide_overlay').catch(() => {})
-  }, [overlayVisible])
+  }, [])
 
-  const handleCorner = useCallback(async (corner: Corner) => {
+  const handleCorner = useCallback(async (next: Corner) => {
+    setCorner(next)
     try {
       const monitor = await currentMonitor()
       if (!monitor) return
       const { x: screenX, y: screenY } = monitor.position
       const { width: screenWidth, height: screenHeight } = monitor.size
-      const x = corner.includes('left')
+      const x = next.includes('left')
         ? screenX + SNAP_PADDING
         : screenX + screenWidth - OVERLAY_SIZE.width - SNAP_PADDING
-      const y = corner.includes('top')
+      const y = next.includes('top')
         ? screenY + SNAP_PADDING
         : screenY + screenHeight - OVERLAY_SIZE.height - SNAP_PADDING
       await invoke('set_overlay_position', { x: Math.round(x), y: Math.round(y) })
@@ -229,85 +271,92 @@ function OverlayTab() {
     }
   }, [])
 
+  const previewPeers = [{ id: 'self', name: displayName || 'You', speaking: true, muted: false }]
+
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-text-primary">Show overlay</span>
-        <Toggle checked={overlayVisible} onChange={handleToggleVisible} label="Show overlay" />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <span className="text-xs text-text-secondary">Mode</span>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setOverlayMode('compact')}
-            className={`flex-1 rounded-card px-3 py-1.5 text-sm font-medium ${
-              overlayMode === 'compact' ? 'bg-accent text-white' : 'bg-surface2 text-text-secondary'
-            }`}
-          >
-            Compact
-          </button>
-          <button
-            type="button"
-            onClick={() => setOverlayMode('full')}
-            className={`flex-1 rounded-card px-3 py-1.5 text-sm font-medium ${
-              overlayMode === 'full' ? 'bg-accent text-white' : 'bg-surface2 text-text-secondary'
-            }`}
-          >
-            Full
-          </button>
+    <div className="space-y-5">
+      <div className="flex items-center justify-between rounded-lg bg-surface2 p-3">
+        <div>
+          <div className="text-sm font-medium">Show game overlay</div>
+          <div className="text-xs text-text-tertiary">Floating panel during games</div>
         </div>
+        <Switch checked={overlayVisible} onCheckedChange={handleToggleVisible} />
       </div>
 
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-text-primary">Auto-hide</span>
-        <Toggle checked={overlayAutoHide} onChange={setOverlayAutoHide} label="Auto-hide" />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs text-text-secondary">
-          Opacity — {Math.round(overlayOpacity * 100)}%
-        </label>
-        <input
-          type="range"
-          min={30}
-          max={100}
-          value={Math.round(overlayOpacity * 100)}
-          onChange={(event) => setOverlayOpacity(Number(event.target.value) / 100)}
-          className="accent-accent"
-        />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <span className="text-xs text-text-secondary">Screen corner</span>
-        <div className="grid w-32 grid-cols-2 grid-rows-2 gap-2">
-          <button
-            type="button"
-            onClick={() => void handleCorner('top-left')}
-            className="h-10 rounded-card border border-border bg-surface2 hover:border-accent"
-            aria-label="Snap to top-left"
-          />
-          <button
-            type="button"
-            onClick={() => void handleCorner('top-right')}
-            className="h-10 rounded-card border border-border bg-surface2 hover:border-accent"
-            aria-label="Snap to top-right"
-          />
-          <button
-            type="button"
-            onClick={() => void handleCorner('bottom-left')}
-            className="h-10 rounded-card border border-border bg-surface2 hover:border-accent"
-            aria-label="Snap to bottom-left"
-          />
-          <button
-            type="button"
-            onClick={() => void handleCorner('bottom-right')}
-            className="h-10 rounded-card border border-border bg-surface2 hover:border-accent"
-            aria-label="Snap to bottom-right"
-          />
+      <Section title="Mode">
+        <div className="inline-flex rounded-lg bg-surface2 p-1">
+          {(['compact', 'full'] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setOverlayMode(mode)}
+              className={cn(
+                'rounded-md px-4 py-1.5 text-xs font-medium capitalize transition-colors',
+                overlayMode === mode ? 'bg-accent text-primary-foreground' : 'text-text-secondary',
+              )}
+            >
+              {mode}
+            </button>
+          ))}
         </div>
-      </div>
+      </Section>
+
+      <Section title="Behavior">
+        <Row label="Auto-hide">
+          <Switch checked={overlayAutoHide} onCheckedChange={setOverlayAutoHide} />
+        </Row>
+        <Row label="Opacity">
+          <LSlider
+            value={Math.round(overlayOpacity * 100)}
+            min={30}
+            max={100}
+            onChange={(v) => setOverlayOpacity(v / 100)}
+          />
+        </Row>
+      </Section>
+
+      <Section title="Position">
+        <div className="grid grid-cols-2 gap-2">
+          {CORNERS.map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => void handleCorner(c.key)}
+              className={cn(
+                'flex items-center gap-2 rounded-lg border bg-surface2 p-3 text-sm transition-colors',
+                corner === c.key ? 'border-accent bg-accent/10 text-accent' : 'border-border hover:border-border-hover',
+              )}
+            >
+              {c.icon}
+              {c.label}
+            </button>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="Preview">
+        <div
+          className="relative h-32 overflow-hidden rounded-lg border border-border"
+          style={{ background: 'linear-gradient(135deg, #1a1a2a, #2a1a2a)' }}
+        >
+          <div
+            className="absolute"
+            style={{
+              opacity: overlayOpacity,
+              top: corner.includes('top') ? 8 : undefined,
+              bottom: corner.includes('bottom') ? 8 : undefined,
+              left: corner.includes('left') ? 8 : undefined,
+              right: corner.includes('right') ? 8 : undefined,
+            }}
+          >
+            {overlayMode === 'compact' ? (
+              <OverlayCompact peers={previewPeers} />
+            ) : (
+              <OverlayFull peers={previewPeers} />
+            )}
+          </div>
+        </div>
+      </Section>
     </div>
   )
 }
@@ -315,53 +364,19 @@ function OverlayTab() {
 function HotkeysTab() {
   const hotkeys = useSettingsStore((state) => state.hotkeys)
   const setHotkeys = useSettingsStore((state) => state.setHotkeys)
-  const [capturing, setCapturing] = useState<keyof HotkeyMap | null>(null)
-
-  useEffect(() => {
-    if (!capturing) return
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      event.preventDefault()
-      const combo = comboFromEvent(event)
-      if (!combo) return
-      setHotkeys({ ...hotkeys, [capturing]: combo })
-      setCapturing(null)
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [capturing, hotkeys, setHotkeys])
 
   return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="border-b border-border text-left text-xs text-text-secondary">
-          <th className="py-2">Action</th>
-          <th className="py-2">Current Binding</th>
-          <th className="py-2">Edit</th>
-        </tr>
-      </thead>
-      <tbody>
-        {(Object.keys(HOTKEY_LABELS) as (keyof HotkeyMap)[]).map((action) => (
-          <tr key={action} className="border-b border-border/50">
-            <td className="py-2 text-text-primary">{HOTKEY_LABELS[action]}</td>
-            <td className="py-2 font-mono text-text-secondary">
-              {capturing === action ? 'Press any key...' : hotkeys[action]}
-            </td>
-            <td className="py-2">
-              <button
-                type="button"
-                onClick={() => setCapturing(action)}
-                className="rounded p-1 text-text-secondary hover:text-text-primary"
-                aria-label={`Edit ${HOTKEY_LABELS[action]} hotkey`}
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div className="space-y-3">
+      <p className="text-xs text-text-tertiary">Click a key to rebind. Modifier combos supported.</p>
+      {(Object.keys(HOTKEY_LABELS) as (keyof HotkeyMap)[]).map((action) => (
+        <Row key={action} label={HOTKEY_LABELS[action]}>
+          <RebindPill
+            value={hotkeys[action]}
+            onChange={(combo) => setHotkeys({ ...hotkeys, [action]: combo })}
+          />
+        </Row>
+      ))}
+    </div>
   )
 }
 
@@ -439,51 +454,42 @@ function SoundboardTab() {
   )
 
   return (
-    <div className="flex flex-col gap-2">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="audio/*"
-        className="hidden"
-        onChange={handleFileChosen}
-      />
+    <div className="space-y-2">
+      <input ref={fileInputRef} type="file" accept="audio/*" className="hidden" onChange={handleFileChosen} />
       {soundboardFiles.map((file, slot) => (
-        <div
-          key={slot}
-          className="flex items-center justify-between rounded-card border border-border bg-surface2 px-3 py-2"
-        >
-          <div className="flex flex-col">
-            <span className="text-xs text-text-secondary">Slot {slot + 1}</span>
-            <span className="text-sm text-text-primary">{file ? fileNames[slot] ?? 'Custom sound' : 'Empty'}</span>
+        <div key={slot} className="flex items-center gap-3 rounded-lg bg-surface2 p-3">
+          <span className="grid h-7 w-7 place-items-center rounded-full bg-accent/15 text-xs font-bold text-accent">
+            {slot + 1}
+          </span>
+          <div className="flex-1 truncate text-sm">
+            {file ? fileNames[slot] ?? 'Custom sound' : <span className="text-text-tertiary">Empty</span>}
           </div>
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => handleUploadClick(slot)}
-              aria-label="Upload sound"
-              className="rounded p-1.5 text-text-secondary hover:text-text-primary"
-            >
-              <Upload className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => void handlePreview(slot)}
-              disabled={!file}
-              aria-label="Preview sound"
-              className="rounded p-1.5 text-text-secondary hover:text-text-primary disabled:opacity-40"
-            >
-              <Play className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleClear(slot)}
-              disabled={!file}
-              aria-label="Clear sound"
-              className="rounded p-1.5 text-text-secondary hover:text-muted disabled:opacity-40"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => handleUploadClick(slot)}
+            aria-label="Upload sound"
+            className="grid h-8 w-8 place-items-center rounded-md border border-border hover:border-border-hover"
+          >
+            <Upload size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => void handlePreview(slot)}
+            disabled={!file}
+            aria-label="Preview sound"
+            className="grid h-8 w-8 place-items-center rounded-md bg-speaking/15 text-speaking hover:bg-speaking/25 disabled:opacity-40"
+          >
+            <Play size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleClear(slot)}
+            disabled={!file}
+            aria-label="Clear sound"
+            className="grid h-8 w-8 place-items-center rounded-md bg-muted-red/15 text-muted-red hover:bg-muted-red/25 disabled:opacity-40"
+          >
+            <Trash2 size={14} />
+          </button>
         </div>
       ))}
     </div>
@@ -492,39 +498,44 @@ function SoundboardTab() {
 
 function AboutTab() {
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <span className="text-xs text-text-secondary">Version</span>
-        <p className="text-sm text-text-primary">{packageJson.version}</p>
+    <div className="space-y-5">
+      <div className="flex flex-col items-center gap-2 pt-2">
+        <div className="grid h-14 w-14 place-items-center rounded-2xl bg-accent/15 text-accent">
+          <Ghost size={32} />
+        </div>
+        <div className="text-lg font-semibold">Wisp</div>
+        <div className="text-xs text-text-tertiary">v{packageJson.version}</div>
       </div>
-
-      <div>
-        <span className="text-xs text-text-secondary">Source</span>
-        <p className="text-sm">
-          <a
-            href="https://github.com/chidhvilasa/wisp-voice"
-            target="_blank"
-            rel="noreferrer"
-            className="text-accent hover:underline"
-          >
-            github.com/chidhvilasa/wisp-voice
-          </a>
-        </p>
+      <p className="text-center text-sm text-text-secondary">
+        A featherweight voice chat for gamers. No accounts, no servers — just a code and your squad.
+      </p>
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { v: '< 50 MB', l: 'memory' },
+          { v: '< 1%', l: 'CPU' },
+          { v: 'E2E', l: 'encrypted' },
+        ].map((s) => (
+          <div key={s.l} className="rounded-lg bg-surface2 p-3 text-center">
+            <div className="text-sm font-semibold text-accent">{s.v}</div>
+            <div className="text-[11px] uppercase tracking-wider text-text-tertiary">{s.l}</div>
+          </div>
+        ))}
       </div>
-
-      <div className="flex items-center gap-2">
-        <span className="rounded-full bg-speaking/20 px-2.5 py-1 text-xs font-medium text-speaking">
-          DTLS-SRTP Active
-        </span>
-        <span className="text-xs text-text-secondary">All voice traffic is end-to-end encrypted</span>
+      <a
+        href="https://github.com/chidhvilasa/wisp-voice"
+        target="_blank"
+        rel="noreferrer"
+        className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm hover:border-border-hover"
+      >
+        <ExternalLink size={14} /> View on GitHub
+      </a>
+      <div className="flex items-center gap-2 rounded-lg border border-speaking/30 bg-speaking/10 p-3 text-xs">
+        <Lock size={14} className="text-speaking" />
+        <span className="text-speaking">DTLS-SRTP Encrypted</span>
       </div>
-
-      <div>
-        <span className="mb-1 block text-xs text-text-secondary">Resource usage</span>
+      <div className="flex justify-center">
         <ResourceWidget />
       </div>
-
-      <p className="text-xs text-text-secondary">See WISP_PLAN.md in the project root for technical details.</p>
     </div>
   )
 }
@@ -535,47 +546,59 @@ interface SettingsProps {
 
 export default function Settings({ onClose }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<Tab>('audio')
+  const displayName = useSettingsStore((state) => state.displayName)
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="flex h-[520px] w-[520px] flex-col rounded-card border border-border bg-surface">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 className="text-sm font-semibold text-text-primary">Settings</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close settings"
-            className="rounded p-1 text-text-secondary hover:text-text-primary"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        className={cn(
+          'w-[540px] max-w-[540px] max-h-[85vh] overflow-hidden rounded-2xl border border-border bg-surface p-0',
+          'animate-fade-scale-in shadow-2xl',
+        )}
+      >
+        <header className="border-b border-border p-5 pb-4">
+          <h2 className="mb-4 text-lg font-semibold">Settings</h2>
+          <div className="flex items-center gap-3">
+            <Avatar id={displayName || 'You'} name={displayName || 'You'} size={36} />
+            <div className="text-sm font-medium">{displayName || 'You'}</div>
+          </div>
+        </header>
 
-        <div className="flex border-b border-border px-2">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-3 py-2 text-sm font-medium ${
-                activeTab === tab.id
-                  ? 'border-b-2 border-accent text-text-primary'
-                  : 'text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Tab)}>
+          <TabsList className="h-auto w-full justify-start gap-1 rounded-none border-b border-border bg-transparent px-5">
+            {TABS.map((tab) => (
+              <TabsTrigger
+                key={tab.id}
+                value={tab.id}
+                className={cn(
+                  'rounded-none border-b-2 border-transparent bg-transparent px-3 py-2.5 text-sm',
+                  'data-active:border-accent data-active:bg-transparent data-active:text-text-primary data-active:shadow-none',
+                )}
+              >
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
 
-        <div className="flex-1 overflow-y-auto p-4">
-          {activeTab === 'audio' && <AudioTab />}
-          {activeTab === 'overlay' && <OverlayTab />}
-          {activeTab === 'hotkeys' && <HotkeysTab />}
-          {activeTab === 'soundboard' && <SoundboardTab />}
-          {activeTab === 'about' && <AboutTab />}
-        </div>
-      </div>
-    </div>
+          <div className="max-h-[calc(85vh-180px)] overflow-y-auto px-5 py-5">
+            <TabsContent value="audio" className="mt-0">
+              <AudioTab />
+            </TabsContent>
+            <TabsContent value="overlay" className="mt-0">
+              <OverlayTab />
+            </TabsContent>
+            <TabsContent value="hotkeys" className="mt-0">
+              <HotkeysTab />
+            </TabsContent>
+            <TabsContent value="soundboard" className="mt-0">
+              <SoundboardTab />
+            </TabsContent>
+            <TabsContent value="about" className="mt-0">
+              <AboutTab />
+            </TabsContent>
+          </div>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
   )
 }

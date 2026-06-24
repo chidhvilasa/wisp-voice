@@ -3,9 +3,10 @@ import type { MouseEvent as ReactMouseEvent } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { currentMonitor, getCurrentWindow, PhysicalPosition } from '@tauri-apps/api/window'
-import { Lock, MicOff } from 'lucide-react'
+import { Lock } from 'lucide-react'
 import { useSettingsStore } from '../store/settingsStore'
-import { getPeerColor } from '../lib/peerColor'
+import { OverlayCompact, OverlayFull } from '../components/wisp/OverlayPreview'
+import type { Peer as WispPeer } from '../components/wisp/types'
 import type { ConnectionQuality, Peer } from '../types'
 
 const SNAP_PADDING = 16
@@ -28,36 +29,10 @@ interface OverlayMember {
   isSelf: boolean
 }
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '?'
-  return parts
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('')
-}
-
-function latencyDotClass(latencyMs: number): string {
-  if (latencyMs < 80) return 'bg-speaking'
-  if (latencyMs < 200) return 'bg-warning'
-  return 'bg-muted'
-}
-
-function qualityClass(quality: ConnectionQuality): string {
-  if (quality === 'good') return 'bg-speaking'
-  if (quality === 'ok') return 'bg-warning'
-  return 'bg-muted'
-}
-
-function SignalBars({ quality }: { quality: ConnectionQuality }) {
-  const color = qualityClass(quality)
-  return (
-    <div className="flex items-end gap-[1px]">
-      <span className={`h-1 w-[2px] ${color}`} />
-      <span className={`h-1.5 w-[2px] ${color}`} />
-      <span className={`h-2 w-[2px] ${color}`} />
-    </div>
-  )
+function signalFromQuality(quality: ConnectionQuality): 1 | 2 | 3 {
+  if (quality === 'good') return 3
+  if (quality === 'ok') return 2
+  return 1
 }
 
 export default function Overlay() {
@@ -260,80 +235,24 @@ export default function Overlay() {
     transition: `opacity ${transitionMs}ms ease`,
   }
 
-  if (overlayMode === 'full') {
-    return (
-      <div
-        className="flex h-full w-full flex-col gap-1.5 rounded-2xl bg-surface/90 p-2"
-        style={containerStyle}
-        onMouseDown={handleMouseDown}
-      >
-        {members.map((member) => {
-          const avatarColor = member.isSelf ? '#7C5CFC' : getPeerColor(member.id)
-          const isSpeakingRing = member.speaking && !member.muted
-          return (
-            <div key={member.id} className="flex items-center gap-2 rounded-card bg-surface2/80 p-1.5">
-              <div
-                className={`relative flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white ${
-                  isSpeakingRing ? 'animate-[wisp-pulse_1.2s_ease-in-out_infinite]' : ''
-                }`}
-                style={{
-                  backgroundColor: avatarColor,
-                  boxShadow: isSpeakingRing ? '0 0 0 3px #22C55E' : undefined,
-                }}
-              >
-                {member.muted ? (
-                  <MicOff className="h-4 w-4 text-white" />
-                ) : (
-                  <span>{initials(member.name)}</span>
-                )}
-              </div>
-              <div className="flex flex-1 flex-col overflow-hidden">
-                <span className="truncate text-xs font-medium text-text-primary">{member.name}</span>
-                {!member.isSelf && (
-                  <div className="flex items-center gap-1">
-                    <SignalBars quality={member.quality} />
-                    <span className="text-[10px] text-text-secondary">{member.latencyMs}ms</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )
-        })}
-        <Lock className="absolute bottom-1 right-1 h-2 w-2 text-text-secondary" />
-      </div>
-    )
-  }
+  const wispMembers: WispPeer[] = members.map((member) => ({
+    id: member.id,
+    name: member.name,
+    isSelf: member.isSelf,
+    speaking: member.speaking,
+    muted: member.muted,
+    signal: signalFromQuality(member.quality),
+    latencyMs: member.latencyMs,
+  }))
 
   return (
-    <div
-      className="relative flex h-full w-full items-center justify-center gap-2 rounded-2xl bg-surface/80 p-3"
-      style={containerStyle}
-      onMouseDown={handleMouseDown}
-    >
-      {members.map((member) => {
-        const avatarColor = member.isSelf ? '#7C5CFC' : getPeerColor(member.id)
-        const isSpeakingRing = member.speaking && !member.muted
-        return (
-          <div
-            key={member.id}
-            className={`relative flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-medium text-white ${
-              isSpeakingRing ? 'animate-[wisp-pulse_1.2s_ease-in-out_infinite]' : ''
-            }`}
-            style={{
-              backgroundColor: member.muted ? '#EF4444' : avatarColor,
-              boxShadow: isSpeakingRing ? '0 0 0 3px #22C55E' : undefined,
-            }}
-          >
-            {member.muted ? <MicOff className="h-3.5 w-3.5 text-white" /> : initials(member.name)}
-            {!member.isSelf && (
-              <span
-                className={`absolute -bottom-0.5 -right-0.5 h-[3px] w-[3px] rounded-full ${latencyDotClass(member.latencyMs)}`}
-              />
-            )}
-          </div>
-        )
-      })}
-      <Lock className="absolute bottom-1 right-1 h-2 w-2 text-text-secondary" />
+    <div className="relative h-full w-full" style={containerStyle} onMouseDown={handleMouseDown}>
+      {overlayMode === 'full' ? (
+        <OverlayFull peers={wispMembers} className="h-full w-full" />
+      ) : (
+        <OverlayCompact peers={wispMembers} />
+      )}
+      <Lock className="absolute bottom-1 right-1 h-2 w-2 text-white/40" />
     </div>
   )
 }

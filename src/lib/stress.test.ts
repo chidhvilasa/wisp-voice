@@ -873,9 +873,9 @@ describe('WISP stress tests', () => {
       listenHandlers['peers-updated']?.({ payload: [makePeer('Target Peer')] })
     })
 
-    expect(container.textContent).toContain('TP')
-    expect(container.textContent).not.toContain('OP')
-    expect(container.querySelectorAll('div[class*="rounded-full"]').length).toBe(2)
+    expect(container.textContent).toContain('T')
+    expect(container.textContent).not.toContain('O')
+    expect(container.querySelectorAll('div[class*="rounded-full"]').length).toBe(4)
     expect(errorSpy).not.toHaveBeenCalled()
 
     await act(async () => {
@@ -1059,7 +1059,7 @@ describe('WISP stress tests', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
 
-    const target = container.querySelector('[class*="rounded-2xl"]') as HTMLElement
+    const target = container.firstElementChild as HTMLElement
     const addSpy = vi.spyOn(window, 'addEventListener')
     const removeSpy = vi.spyOn(window, 'removeEventListener')
 
