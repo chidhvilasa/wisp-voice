@@ -6,6 +6,7 @@ import { VADProcessor } from './vad'
 export interface WispVoiceEngineEvents {
   'peer-joined': (peerId: string) => void
   'peer-left': (peerId: string) => void
+  'peer-name': (peerId: string, name: string) => void
   speaking: (peerId: string, isSpeaking: boolean) => void
   'connection-state-change': (state: ConnectionState) => void
   'chat-message': (message: ChatMessage) => void
@@ -134,7 +135,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
         this.handleSignalMessage(event.data as string)
       }
       ws.onerror = () => {
-        const error = new Error('Signaling connection error')
+        const error = new Error('Unable to join the room. It may not exist, or the server may be unreachable.')
         this.emit('error', error)
         if (this.pendingConnectReject) {
           this.pendingConnectReject(error)
@@ -143,6 +144,16 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
         }
       }
       ws.onclose = () => {
+        if (this.pendingConnectReject) {
+          const error = new Error(
+            'Unable to join the room. It may not exist, or the server may be unreachable.',
+          )
+          this.setConnectionState('error')
+          this.pendingConnectReject(error)
+          this.pendingConnectResolve = null
+          this.pendingConnectReject = null
+          return
+        }
         if (this.connectionState !== 'idle') {
           this.setConnectionState('reconnecting')
         }
@@ -580,16 +591,36 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
 
   private setupDataChannel(remoteId: string, channel: RTCDataChannel): void {
     this.dataChannels.set(remoteId, channel)
+
+    const sendHello = () => {
+      try {
+        channel.send(JSON.stringify({ type: 'hello', name: this.displayName }))
+      } catch (error) {
+        console.warn('Failed to send hello to peer', error)
+      }
+    }
+    if (channel.readyState === 'open') {
+      sendHello()
+    } else {
+      channel.onopen = sendHello
+    }
+
     channel.onmessage = (event: MessageEvent) => {
-      this.handleDataChannelMessage(event.data as string)
+      this.handleDataChannelMessage(remoteId, event.data as string)
     }
   }
 
-  private handleDataChannelMessage(data: string): void {
+  private handleDataChannelMessage(remoteId: string, data: string): void {
     let message: Record<string, unknown>
     try {
       message = JSON.parse(data)
     } catch {
+      return
+    }
+
+    if (message['type'] === 'hello') {
+      const name = message['name'] as string
+      if (name) this.emit('peer-name', remoteId, name)
       return
     }
 

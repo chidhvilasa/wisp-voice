@@ -9,8 +9,25 @@ import { VADProcessor } from './vad'
 import { createReconnectScheduler, RECONNECT_DELAYS_MS, MAX_RECONNECT_ATTEMPTS } from './reconnect'
 import { joinRoom, createRoom, destroyVoiceEngine, saveRecentRoom } from './rooms'
 import { useSettingsStore } from '../store/settingsStore'
+import { useVoiceStore } from '../store/voiceStore'
+import { useVoice } from '../hooks/useVoice'
+import type { UseVoiceResult } from '../hooks/useVoice'
+import App from '../App'
 import Overlay from '../overlay/Overlay'
 import type { Peer } from '../types'
+
+// ---------------------------------------------------------------------------
+// Mock @tauri-apps/api/core — captures invoke() calls so tests can assert the
+// frontend actually pushes state to the Rust backend (hotkeys, tray icon).
+// ---------------------------------------------------------------------------
+
+const { invokeMock } = vi.hoisted(() => ({
+  invokeMock: vi.fn(async (_cmd: string, _args?: unknown) => undefined),
+}))
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: invokeMock,
+}))
 
 // ---------------------------------------------------------------------------
 // Mock @tauri-apps/api/event — captures registered listeners for Scenario 12.
@@ -1064,5 +1081,77 @@ describe('WISP stress tests', () => {
 
     addSpy.mockRestore()
     removeSpy.mockRestore()
+  })
+
+  it('App pushes the persisted hotkeys to the Rust backend once on startup', async () => {
+    ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    invokeMock.mockClear()
+
+    useSettingsStore.getState().setHotkeys({
+      mute: 'Ctrl+Alt+M',
+      deafen: 'Ctrl+Alt+D',
+      overlayToggle: 'Ctrl+Alt+O',
+      overlayMode: 'Ctrl+Alt+L',
+      soundboard1: 'Ctrl+Alt+1',
+      soundboard2: 'Ctrl+Alt+2',
+      soundboard3: 'Ctrl+Alt+3',
+      soundboard4: 'Ctrl+Alt+4',
+      soundboard5: 'Ctrl+Alt+5',
+    })
+    const persistedHotkeys = useSettingsStore.getState().hotkeys
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(createElement(App))
+    })
+
+    expect(invokeMock).toHaveBeenCalledWith('update_hotkeys', { hotkeys: persistedHotkeys })
+
+    await act(async () => {
+      root.unmount()
+    })
+    document.body.removeChild(container)
+  })
+
+  it('toggling mute/deafen syncs the tray icon via update_tray_icon', async () => {
+    ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    invokeMock.mockClear()
+    destroyVoiceEngine()
+    useVoiceStore.getState().reset()
+
+    let voiceApi: UseVoiceResult | null = null
+    function Harness() {
+      voiceApi = useVoice()
+      return null
+    }
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(createElement(Harness))
+    })
+
+    expect(invokeMock).toHaveBeenCalledWith('update_tray_icon', { muted: false, deafened: false })
+
+    await act(async () => {
+      voiceApi?.toggleMute()
+    })
+    expect(invokeMock).toHaveBeenCalledWith('update_tray_icon', { muted: true, deafened: false })
+
+    await act(async () => {
+      voiceApi?.toggleDeafen()
+    })
+    expect(invokeMock).toHaveBeenCalledWith('update_tray_icon', { muted: true, deafened: true })
+
+    await act(async () => {
+      root.unmount()
+    })
+    document.body.removeChild(container)
+    destroyVoiceEngine()
   })
 })

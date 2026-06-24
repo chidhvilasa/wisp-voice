@@ -28,13 +28,32 @@ export function generatePeerId(): string {
 export class WispRoom {
   private peers: Map<string, WebSocket> = new Map()
   private rateLimits: Map<string, number[]> = new Map()
+  private state: DurableObjectState
 
-  constructor(_state: DurableObjectState, _env: Env) {}
+  constructor(state: DurableObjectState, _env: Env) {
+    this.state = state
+  }
 
-  fetch(request: Request): Response {
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url)
+
+    // idFromName() derives a Durable Object deterministically from the room
+    // code string, so any 6-character code "exists" as far as the runtime
+    // is concerned even if nobody ever called POST /room for it. This marker
+    // is the only signal that distinguishes a real room from a guessed code.
+    if (request.method === 'POST' && url.pathname === '/create') {
+      await this.state.storage.put('created', true)
+      return new Response(null, { status: 204 })
+    }
+
     const upgradeHeader = request.headers.get('Upgrade')
     if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
       return new Response('Expected websocket', { status: 400 })
+    }
+
+    const created = await this.state.storage.get('created')
+    if (!created) {
+      return new Response('Room not found', { status: 404 })
     }
 
     const pair = new WebSocketPair()
@@ -144,7 +163,8 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
   if (request.method === 'POST' && url.pathname === '/room') {
     const code = generateRoomCode()
     const id = env.WISP_ROOM.idFromName(code)
-    env.WISP_ROOM.get(id)
+    const stub = env.WISP_ROOM.get(id)
+    await stub.fetch('https://internal/create', { method: 'POST' })
     return new Response(JSON.stringify({ code }), {
       headers: { 'content-type': 'application/json', ...CORS_HEADERS },
     })

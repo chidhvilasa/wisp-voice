@@ -131,6 +131,14 @@ export function useVoice(): UseVoiceResult {
       removePeer(peerId)
     }
 
+    const handlePeerName = (peerId: string, name: string) => {
+      debug('peer-name', peerId, name)
+      const peer = useVoiceStore.getState().peers.get(peerId)
+      if (peer) {
+        setPeer({ ...peer, name })
+      }
+    }
+
     const handleSpeaking = (peerId: string, isSpeaking: boolean) => {
       debug('speaking', peerId, isSpeaking)
       const peer = useVoiceStore.getState().peers.get(peerId)
@@ -175,6 +183,7 @@ export function useVoice(): UseVoiceResult {
 
     engine.on('peer-joined', handlePeerJoined)
     engine.on('peer-left', handlePeerLeft)
+    engine.on('peer-name', handlePeerName)
     engine.on('speaking', handleSpeaking)
     engine.on('connection-state-change', handleConnectionStateChange)
     engine.on('chat-message', handleChatMessage)
@@ -184,6 +193,7 @@ export function useVoice(): UseVoiceResult {
     return () => {
       engine.off('peer-joined', handlePeerJoined)
       engine.off('peer-left', handlePeerLeft)
+      engine.off('peer-name', handlePeerName)
       engine.off('speaking', handleSpeaking)
       engine.off('connection-state-change', handleConnectionStateChange)
       engine.off('chat-message', handleChatMessage)
@@ -223,6 +233,10 @@ export function useVoice(): UseVoiceResult {
 
     return unsubscribe
   }, [])
+
+  useEffect(() => {
+    void invoke('update_tray_icon', { muted: localMuted, deafened: localDeafened }).catch(() => {})
+  }, [localMuted, localDeafened])
 
   useEffect(() => {
     let cancelled = false

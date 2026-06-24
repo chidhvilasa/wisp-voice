@@ -269,6 +269,7 @@ class MockSignalingRoom {
 
 class MockWebSocket {
   static rooms: Map<string, MockSignalingRoom> = new Map()
+  static refusedCodes: Set<string> = new Set()
 
   readyState = 0
   peerId = ''
@@ -281,6 +282,18 @@ class MockWebSocket {
   constructor(public url: string) {
     const match = /\/room\/([^/]+)\/ws/.exec(url)
     const code = match?.[1] ?? 'DEFAULT'
+
+    if (MockWebSocket.refusedCodes.has(code)) {
+      // Simulates the signaling server closing the connection (e.g. a 404
+      // for a room that was never created) without ever sending 'joined'.
+      this.room = new MockSignalingRoom()
+      queueMicrotask(() => {
+        this.readyState = 3
+        this.onclose?.()
+      })
+      return
+    }
+
     let room = MockWebSocket.rooms.get(code)
     if (!room) {
       room = new MockSignalingRoom()
@@ -311,6 +324,7 @@ class MockWebSocket {
 
 function installWebSocket(): void {
   MockWebSocket.rooms = new Map()
+  MockWebSocket.refusedCodes = new Set()
   vi.stubGlobal('WebSocket', MockWebSocket)
 }
 
@@ -369,6 +383,27 @@ describe('WispVoiceEngine', () => {
 
     expect(engineA.getConnectionState()).toBe('connected')
     expect(engineB.getConnectionState()).toBe('connected')
+
+    engineA.disconnect()
+    engineB.disconnect()
+  })
+
+  it('exchanges display names over the data channel instead of showing raw peer ids', async () => {
+    const engineA = new WispVoiceEngine('ws://localhost:8787')
+    const engineB = new WispVoiceEngine('ws://localhost:8787')
+
+    const nameForB = new Promise<string>((resolve) => {
+      engineA.on('peer-name', (_peerId, name) => resolve(name))
+    })
+    const nameForA = new Promise<string>((resolve) => {
+      engineB.on('peer-name', (_peerId, name) => resolve(name))
+    })
+
+    await engineA.connect('NAME01', 'Alice')
+    await engineB.connect('NAME01', 'Bob')
+
+    expect(await nameForB).toBe('Bob')
+    expect(await nameForA).toBe('Alice')
 
     engineA.disconnect()
     engineB.disconnect()
@@ -458,5 +493,13 @@ describe('WispVoiceEngine', () => {
     expect(engineA.getConnectionState()).toBe('idle')
 
     engineB.disconnect()
+  })
+
+  it('rejects connect() with a friendly error instead of hanging when the room does not exist', async () => {
+    MockWebSocket.refusedCodes.add('NOROOM')
+    const engine = new WispVoiceEngine('ws://localhost:8787')
+
+    await expect(engine.connect('NOROOM', 'Alice')).rejects.toThrow(/room/i)
+    expect(engine.getConnectionState()).toBe('error')
   })
 })
