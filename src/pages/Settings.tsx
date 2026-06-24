@@ -168,7 +168,7 @@ function AudioTab() {
           <select
             value={inputDevice}
             onChange={(event) => setInputDevice(event.target.value)}
-            className="rounded-md border border-border bg-surface2 px-3 py-1.5 text-xs outline-none focus:border-accent"
+            className="max-w-[280px] truncate rounded-md border border-border bg-surface2 px-3 py-1.5 text-xs outline-none focus:border-accent"
           >
             <option value="">System default</option>
             {inputDevices.map((device, index) => (
@@ -182,7 +182,7 @@ function AudioTab() {
           <select
             value={outputDevice}
             onChange={(event) => setOutputDevice(event.target.value)}
-            className="rounded-md border border-border bg-surface2 px-3 py-1.5 text-xs outline-none focus:border-accent"
+            className="max-w-[280px] truncate rounded-md border border-border bg-surface2 px-3 py-1.5 text-xs outline-none focus:border-accent"
           >
             <option value="">System default</option>
             {outputDevices.map((device, index) => (
@@ -589,7 +589,7 @@ export default function Settings({ onClose }: SettingsProps) {
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         className={cn(
-          'flex w-[540px] max-w-[540px] max-h-[85vh] flex-col overflow-hidden rounded-2xl border border-border bg-surface p-0',
+          'flex w-[640px] max-w-[640px] max-h-[92vh] flex-col overflow-y-auto rounded-2xl border border-border bg-surface p-0',
           'animate-fade-scale-in shadow-2xl',
         )}
       >
@@ -601,11 +601,7 @@ export default function Settings({ onClose }: SettingsProps) {
           </div>
         </header>
 
-        <Tabs
-          value={activeTab}
-          onValueChange={(value) => setActiveTab(value as Tab)}
-          className="min-h-0 flex-1 flex-col overflow-hidden"
-        >
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Tab)} className="flex-col">
           <TabsList className="h-auto w-full shrink-0 justify-start gap-1 rounded-none border-b border-border bg-transparent px-5">
             {TABS.map((tab) => (
               <TabsTrigger
@@ -621,7 +617,7 @@ export default function Settings({ onClose }: SettingsProps) {
             ))}
           </TabsList>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+          <div className="px-5 py-5">
             <TabsContent value="audio" className="mt-0">
               <AudioTab />
             </TabsContent>

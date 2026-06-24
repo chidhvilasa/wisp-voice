@@ -102,6 +102,12 @@ pub fn get_app_resource_usage(state: State<SysinfoState>) -> Result<ResourceUsag
         }
     }
 
+    // sysinfo reports each process's cpu_usage() relative to a single core, so summing
+    // across the process tree can read past 100% on multi-core machines. Normalize by
+    // logical core count to match the overall-system-capacity convention Task Manager uses.
+    let cpu_count = thread::available_parallelism().map(|n| n.get()).unwrap_or(1) as f32;
+    cpu_percent /= cpu_count;
+
     Ok(ResourceUsage {
         cpu_percent,
         ram_mb: ram_bytes / (1024 * 1024),

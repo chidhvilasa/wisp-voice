@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 const SPEAKING_THRESHOLD_DB = -50
+const UPDATE_INTERVAL_MS = 50
 
 interface MicMeterProps {
   analyser: AnalyserNode | null
@@ -12,6 +13,7 @@ export default function MicMeter({ analyser, isMuted }: MicMeterProps) {
   const [isSpeaking, setIsSpeaking] = useState(false)
   const rafRef = useRef<number | null>(null)
   const bufferRef = useRef<Float32Array | null>(null)
+  const lastUpdateRef = useRef(0)
 
   useEffect(() => {
     if (!analyser || isMuted) {
@@ -24,11 +26,12 @@ export default function MicMeter({ analyser, isMuted }: MicMeterProps) {
       bufferRef.current = new Float32Array(analyser.fftSize)
     }
 
-    const tick = () => {
-      if (document.hidden) {
+    const tick = (time: number) => {
+      if (document.hidden || time - lastUpdateRef.current < UPDATE_INTERVAL_MS) {
         rafRef.current = requestAnimationFrame(tick)
         return
       }
+      lastUpdateRef.current = time
 
       const buffer = bufferRef.current!
       analyser.getFloatTimeDomainData(buffer)
