@@ -37,6 +37,8 @@ const DEFAULT_DUCK_AMOUNT = 0.2
 const SIGNAL_RATE_LIMIT_MAX = 10
 const SIGNAL_RATE_LIMIT_WINDOW_MS = 1000
 const MAX_CHAT_LENGTH = 500
+const SIGNALING_URL = 'https://wisp-signaling.chidhvilasa2004.workers.dev'
+const ICE_CONNECT_TIMEOUT_MS = 15000
 
 interface SignalMessage {
   type: string
@@ -60,11 +62,6 @@ function sanitizeChatText(text: string): string {
   return stripped.length > MAX_CHAT_LENGTH ? `${stripped.slice(0, MAX_CHAT_LENGTH)}...` : stripped
 }
 
-function defaultSignalingUrl(): string {
-  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
-  return env?.VITE_SIGNALING_URL || 'https://wisp-signaling.chidhvilasa2004.workers.dev'
-}
-
 function toWebSocketUrl(signalingUrl: string): string {
   return signalingUrl.replace('https://', 'wss://').replace('http://', 'ws://')
 }
@@ -84,6 +81,8 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
   private roomCode = ''
   private connections: Map<string, RTCPeerConnection> = new Map()
   private dataChannels: Map<string, RTCDataChannel> = new Map()
+  private iceCandidateQueues: Map<string, RTCIceCandidateInit[]> = new Map()
+  private iceTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map()
   private gainNodes: Map<string, GainNode> = new Map()
   private peerVolumes: Map<string, number> = new Map()
   private statsIntervalId: ReturnType<typeof setInterval> | null = null
@@ -96,7 +95,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
   private pendingConnectResolve: (() => void) | null = null
   private pendingConnectReject: ((error: Error) => void) | null = null
 
-  constructor(signalingUrl: string = defaultSignalingUrl()) {
+  constructor(signalingUrl: string = SIGNALING_URL) {
     super()
     this.signalingUrl = signalingUrl
   }
@@ -198,6 +197,12 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     this.connections.clear()
     this.gainNodes.clear()
 
+    for (const timeoutId of this.iceTimeouts.values()) {
+      clearTimeout(timeoutId)
+    }
+    this.iceTimeouts.clear()
+    this.iceCandidateQueues.clear()
+
     for (const vad of this.vadProcessors.values()) {
       vad.destroy()
     }
@@ -284,6 +289,18 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
         } catch (error) {
           console.warn('Failed to send chat message to a peer', error)
         }
+      } else if (channel.readyState === 'connecting') {
+        channel.addEventListener(
+          'open',
+          () => {
+            try {
+              channel.send(payload)
+            } catch (error) {
+              console.warn('Failed to send queued chat message to a peer', error)
+            }
+          },
+          { once: true },
+        )
       }
     }
     this.emit('chat-message', message)
@@ -518,7 +535,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
         break
       }
       case 'room-full': {
-        const error = new Error('Room is full')
+        const error = new Error('Room is full. Maximum 4 people per room.')
         this.emit('error', error)
         this.pendingConnectReject?.(error)
         this.pendingConnectResolve = null
@@ -583,6 +600,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     }
 
     await pc.setRemoteDescription(sdp)
+    await this.flushIceCandidateQueue(remoteId, pc)
     const answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
     this.send({ type: 'answer', to: remoteId, sdp: answer })
@@ -592,6 +610,20 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     const pc = this.connections.get(remoteId)
     if (!pc) return
     await pc.setRemoteDescription(sdp)
+    await this.flushIceCandidateQueue(remoteId, pc)
+  }
+
+  private async flushIceCandidateQueue(remoteId: string, pc: RTCPeerConnection): Promise<void> {
+    const queued = this.iceCandidateQueues.get(remoteId)
+    if (!queued || queued.length === 0) return
+    this.iceCandidateQueues.delete(remoteId)
+    for (const candidate of queued) {
+      try {
+        await pc.addIceCandidate(candidate)
+      } catch {
+        // ignore late/invalid candidates
+      }
+    }
   }
 
   private async handleIceCandidate(
@@ -600,6 +632,14 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
   ): Promise<void> {
     const pc = this.connections.get(remoteId)
     if (!pc || !candidate) return
+
+    if (!pc.remoteDescription) {
+      const queue = this.iceCandidateQueues.get(remoteId) ?? []
+      queue.push(candidate)
+      this.iceCandidateQueues.set(remoteId, queue)
+      return
+    }
+
     try {
       await pc.addIceCandidate(candidate)
     } catch {
@@ -623,6 +663,19 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     pc.ondatachannel = (event: RTCDataChannelEvent) => {
       this.setupDataChannel(remoteId, event.channel)
     }
+
+    const timeoutId = setTimeout(() => {
+      this.iceTimeouts.delete(remoteId)
+      if (pc.connectionState !== 'connected' && pc.connectionState !== 'closed') {
+        this.emit(
+          'error',
+          new Error('Cannot establish P2P connection. Both users may be behind strict firewalls.'),
+        )
+        this.cleanupPeer(remoteId)
+        this.emit('peer-left', remoteId)
+      }
+    }, ICE_CONNECT_TIMEOUT_MS)
+    this.iceTimeouts.set(remoteId, timeoutId)
 
     pc.onconnectionstatechange = () => {
       this.handlePeerConnectionStateChange(remoteId, pc)
@@ -714,6 +767,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
 
   private handlePeerConnectionStateChange(remoteId: string, pc: RTCPeerConnection): void {
     if (pc.connectionState === 'connected') {
+      this.clearIceTimeout(remoteId)
       this.emit('peer-joined', remoteId)
       this.setConnectionState('connected')
     } else if (
@@ -726,7 +780,18 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     }
   }
 
+  private clearIceTimeout(peerId: string): void {
+    const timeoutId = this.iceTimeouts.get(peerId)
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId)
+      this.iceTimeouts.delete(peerId)
+    }
+  }
+
   private cleanupPeer(peerId: string): void {
+    this.clearIceTimeout(peerId)
+    this.iceCandidateQueues.delete(peerId)
+
     const pc = this.connections.get(peerId)
     if (pc) {
       this.closeConnection(pc)
@@ -747,6 +812,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     }
     if (this.speakingPeers.delete(peerId)) {
       this.audioPipeline.setDucked(this.speakingPeers.size > 0, this.duckAmount)
+      this.emit('speaking', peerId, false)
     }
 
     if (this.connections.size === 0) {

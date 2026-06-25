@@ -6,6 +6,7 @@ const RECENT_ROOMS_KEY = 'wisp-recent-rooms'
 const MAX_RECENT_ROOMS = 5
 const ROOM_CODE_PATTERN = /^[A-Za-z0-9]{6}$/
 const CREATE_ROOM_TIMEOUT_MS = 10000
+const SIGNALING_URL = 'https://wisp-signaling.chidhvilasa2004.workers.dev'
 
 let engineInstance: WispVoiceEngine | null = null
 
@@ -21,12 +22,8 @@ export function destroyVoiceEngine(): void {
   engineInstance = null
 }
 
-function signalingHttpUrl(): string {
-  return import.meta.env.VITE_SIGNALING_URL || 'https://wisp-signaling.chidhvilasa2004.workers.dev'
-}
-
 export async function createRoom(): Promise<string> {
-  const baseUrl = signalingHttpUrl()
+  const baseUrl = SIGNALING_URL
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), CREATE_ROOM_TIMEOUT_MS)
 
@@ -40,7 +37,10 @@ export async function createRoom(): Promise<string> {
   }
 
   if (!response.ok) {
-    throw new Error('Unable to create a room right now. Please try again in a moment.')
+    const body = await response.text().catch(() => '')
+    throw new Error(
+      `Unable to create a room (server responded ${response.status}${body ? `: ${body}` : ''}). Please try again in a moment.`,
+    )
   }
 
   let data: { code?: string }

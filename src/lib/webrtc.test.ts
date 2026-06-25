@@ -502,4 +502,41 @@ describe('WispVoiceEngine', () => {
     await expect(engine.connect('NOROOM', 'Alice')).rejects.toThrow(/room/i)
     expect(engine.getConnectionState()).toBe('error')
   })
+
+  it('rejects a duplicate connect() call while one is already in flight', async () => {
+    const engine = new WispVoiceEngine('ws://localhost:8787')
+    const first = engine.connect('ABC123', 'Alice')
+
+    await expect(engine.connect('ABC123', 'Alice')).rejects.toThrow(/already connected or connecting/i)
+
+    await first
+    engine.disconnect()
+  })
+
+  it('queues ICE candidates received before the remote description is set, then flushes them', async () => {
+    const engine = new WispVoiceEngine('ws://localhost:8787') as unknown as {
+      createPeerConnection: (id: string) => MockRTCPeerConnection
+      handleIceCandidate: (id: string, candidate: RTCIceCandidateInit) => Promise<void>
+      flushIceCandidateQueue: (id: string, pc: MockRTCPeerConnection) => Promise<void>
+      iceCandidateQueues: Map<string, RTCIceCandidateInit[]>
+      disconnect: () => void
+    }
+
+    const pc = engine.createPeerConnection('PEER-X')
+    const addIceCandidateSpy = vi.spyOn(pc, 'addIceCandidate')
+
+    const candidate = { candidate: 'cand-1', sdpMid: '0' } as RTCIceCandidateInit
+    await engine.handleIceCandidate('PEER-X', candidate)
+
+    expect(addIceCandidateSpy).not.toHaveBeenCalled()
+    expect(engine.iceCandidateQueues.get('PEER-X')).toEqual([candidate])
+
+    await pc.setRemoteDescription({ type: 'offer', sdp: 'offer-from-someone' })
+    await engine.flushIceCandidateQueue('PEER-X', pc)
+
+    expect(addIceCandidateSpy).toHaveBeenCalledWith(candidate)
+    expect(engine.iceCandidateQueues.has('PEER-X')).toBe(false)
+
+    engine.disconnect()
+  })
 })
