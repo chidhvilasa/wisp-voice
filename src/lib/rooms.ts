@@ -22,7 +22,7 @@ export function destroyVoiceEngine(): void {
 }
 
 function signalingHttpUrl(): string {
-  return import.meta.env.VITE_SIGNALING_URL || 'http://localhost:8787'
+  return import.meta.env.VITE_SIGNALING_URL || 'https://wisp-signaling.chidhvilasa2004.workers.dev'
 }
 
 export async function createRoom(): Promise<string> {

@@ -62,7 +62,11 @@ function sanitizeChatText(text: string): string {
 
 function defaultSignalingUrl(): string {
   const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
-  return env?.VITE_SIGNALING_URL || 'ws://localhost:8787'
+  return env?.VITE_SIGNALING_URL || 'https://wisp-signaling.chidhvilasa2004.workers.dev'
+}
+
+function toWebSocketUrl(signalingUrl: string): string {
+  return signalingUrl.replace('https://', 'wss://').replace('http://', 'ws://')
 }
 
 export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
@@ -106,6 +110,15 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     this.displayName = displayName
     this.setConnectionState('connecting')
 
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      this.setConnectionState('error')
+      const error = new Error(
+        'Microphone access unavailable. If you are on macOS, please grant microphone permission in System Settings → Privacy & Security → Microphone.',
+      )
+      this.emit('error', error)
+      throw error
+    }
+
     try {
       this.localStream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -137,7 +150,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
       this.pendingConnectResolve = resolve
       this.pendingConnectReject = reject
 
-      const url = `${this.signalingUrl}/room/${roomCode}/ws`
+      const url = `${toWebSocketUrl(this.signalingUrl)}/room/${roomCode}/ws`
       const ws = new WebSocket(url)
       this.ws = ws
 
