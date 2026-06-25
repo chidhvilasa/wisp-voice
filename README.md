@@ -10,11 +10,19 @@ Wisp is a lightweight, desktop-only voice chat app built for gamers. It is a rea
 
 | Platform | Download |
 |---|---|
-| Windows | [wisp-voice_0.2.0_x64-setup.exe](https://github.com/chidhvilasa/wisp-voice/releases/latest) |
-| macOS | [wisp-voice_0.2.0_x64.dmg](https://github.com/chidhvilasa/wisp-voice/releases/latest) |
-| Linux | [wisp-voice_0.2.0_amd64.AppImage](https://github.com/chidhvilasa/wisp-voice/releases/latest) |
+| Windows | [Wisp_0.2.0_x64-setup.exe](https://github.com/chidhvilasa/wisp-voice/releases/latest) |
+| macOS (Intel + Apple Silicon) | [Wisp_0.2.0_universal.dmg](https://github.com/chidhvilasa/wisp-voice/releases/latest) |
+| Linux | [Wisp_0.2.0_amd64.AppImage](https://github.com/chidhvilasa/wisp-voice/releases/latest) |
 
 > Built with Tauri v2. macOS and Linux builds are cross-compiled via GitHub Actions.
+
+### macOS: "Apple cannot verify this app"
+
+Wisp's macOS build isn't signed with an Apple Developer certificate yet, so Gatekeeper blocks it on first launch. Use any of these to open it:
+
+1. Right-click (or Control-click) `Wisp.app` in Finder → **Open** → **Open** again on the confirmation dialog.
+2. Or remove the quarantine flag in Terminal: `xattr -cr /Applications/Wisp.app`
+3. Or go to **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to the Wisp warning.
 
 ## Architecture
 

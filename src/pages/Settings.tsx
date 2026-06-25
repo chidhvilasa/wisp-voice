@@ -77,17 +77,19 @@ function readFileAsBase64(file: File): Promise<string> {
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="space-y-3">
-      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">{title}</h3>
-      <div className="space-y-3">{children}</div>
+    <div>
+      <h3 className="mt-[6px] mb-1 text-[10px] font-semibold uppercase tracking-wider text-text-tertiary">
+        {title}
+      </h3>
+      <div>{children}</div>
     </div>
   )
 }
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="text-sm">{label}</span>
+    <div className="flex items-center justify-between gap-4 py-2">
+      <span className="text-[13px]">{label}</span>
       <div className="flex items-center gap-3">{children}</div>
     </div>
   )
@@ -107,7 +109,7 @@ function LSlider({
   suffix?: string
 }) {
   return (
-    <div className="flex w-[220px] items-center gap-3">
+    <div className="flex w-[200px] items-center gap-3">
       <Slider
         value={[value]}
         min={min}
@@ -115,10 +117,45 @@ function LSlider({
         onValueChange={(v) => onChange(Array.isArray(v) ? v[0] ?? 0 : v)}
         className="flex-1"
       />
-      <span className="w-14 text-right font-mono text-xs text-text-secondary">
+      <span className="w-12 shrink-0 text-right font-mono text-xs text-text-secondary">
         {value}
         {suffix}
       </span>
+    </div>
+  )
+}
+
+function SliderRow({
+  label,
+  value,
+  onChange,
+  min = 0,
+  max = 100,
+  suffix = '%',
+}: {
+  label: string
+  value: number
+  onChange: (v: number) => void
+  min?: number
+  max?: number
+  suffix?: string
+}) {
+  return (
+    <div className="py-2">
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-[13px]">{label}</span>
+        <span className="font-mono text-xs text-text-secondary">
+          {value}
+          {suffix}
+        </span>
+      </div>
+      <Slider
+        value={[value]}
+        min={min}
+        max={max}
+        onValueChange={(v) => onChange(Array.isArray(v) ? v[0] ?? 0 : v)}
+        className="w-full"
+      />
     </div>
   )
 }
@@ -162,13 +199,14 @@ function AudioTab() {
   }, [])
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-3">
       <Section title="Input / Output">
-        <Row label="Input device">
+        <div className="flex items-center justify-between gap-3 py-2">
+          <span className="text-[13px]">Input device</span>
           <select
             value={inputDevice}
             onChange={(event) => setInputDevice(event.target.value)}
-            className="max-w-[280px] truncate rounded-md border border-border bg-surface2 px-3 py-1.5 text-xs outline-none focus:border-accent"
+            className="h-[34px] w-[260px] truncate rounded-md border border-border bg-surface2 px-2.5 text-xs outline-none focus:border-accent"
           >
             <option value="">System default</option>
             {inputDevices.map((device, index) => (
@@ -177,12 +215,13 @@ function AudioTab() {
               </option>
             ))}
           </select>
-        </Row>
-        <Row label="Output device">
+        </div>
+        <div className="flex items-center justify-between gap-3 py-2">
+          <span className="text-[13px]">Output device</span>
           <select
             value={outputDevice}
             onChange={(event) => setOutputDevice(event.target.value)}
-            className="max-w-[280px] truncate rounded-md border border-border bg-surface2 px-3 py-1.5 text-xs outline-none focus:border-accent"
+            className="h-[34px] w-[260px] truncate rounded-md border border-border bg-surface2 px-2.5 text-xs outline-none focus:border-accent"
           >
             <option value="">System default</option>
             {outputDevices.map((device, index) => (
@@ -191,7 +230,7 @@ function AudioTab() {
               </option>
             ))}
           </select>
-        </Row>
+        </div>
       </Section>
 
       <Section title="Push-to-talk">
@@ -219,20 +258,24 @@ function AudioTab() {
         </Row>
         {audioDucking && (
           <div className="animate-fade-scale-in border-l-2 border-accent/40 pl-4">
-            <Row label="Duck amount">
-              <LSlider value={Math.round(duckAmount * 100)} onChange={(v) => setDuckAmount(v / 100)} />
-            </Row>
+            <SliderRow label="Duck amount" value={Math.round(duckAmount * 100)} onChange={(v) => setDuckAmount(v / 100)} />
           </div>
         )}
       </Section>
 
       <Section title="Volumes">
-        <Row label="Mic volume">
-          <LSlider value={Math.round(micVolume * 100)} max={200} onChange={(v) => setMicVolume(v / 100)} />
-        </Row>
-        <Row label="Output volume">
-          <LSlider value={Math.round(outputVolume * 100)} max={200} onChange={(v) => setOutputVolume(v / 100)} />
-        </Row>
+        <SliderRow
+          label="Mic volume"
+          value={Math.round(micVolume * 100)}
+          max={200}
+          onChange={(v) => setMicVolume(v / 100)}
+        />
+        <SliderRow
+          label="Output volume"
+          value={Math.round(outputVolume * 100)}
+          max={200}
+          onChange={(v) => setOutputVolume(v / 100)}
+        />
       </Section>
 
       <div>
@@ -245,24 +288,21 @@ function AudioTab() {
           Advanced
         </button>
         {advOpen && (
-          <div className="animate-fade-scale-in mt-4 space-y-3">
-            <Row label="VAD sensitivity">
-              <LSlider value={vadThreshold} min={-80} max={-20} suffix=" dB" onChange={setVadThreshold} />
-            </Row>
+          <div className="animate-fade-scale-in mt-2 flex flex-col gap-1">
+            <SliderRow label="VAD sensitivity" value={vadThreshold} min={-80} max={-20} suffix=" dB" onChange={setVadThreshold} />
             <Row label="Noise gate">
               <Switch checked={noiseGateEnabled} onCheckedChange={setNoiseGateEnabled} />
             </Row>
             {noiseGateEnabled && (
               <div className="animate-fade-scale-in border-l-2 border-accent/40 pl-4">
-                <Row label="Noise gate threshold">
-                  <LSlider
-                    value={noiseGateThreshold}
-                    min={-80}
-                    max={-20}
-                    suffix=" dB"
-                    onChange={setNoiseGateThreshold}
-                  />
-                </Row>
+                <SliderRow
+                  label="Noise gate threshold"
+                  value={noiseGateThreshold}
+                  min={-80}
+                  max={-20}
+                  suffix=" dB"
+                  onChange={setNoiseGateThreshold}
+                />
               </div>
             )}
           </div>
@@ -311,7 +351,7 @@ function OverlayTab() {
   const previewPeers = [{ id: 'self', name: displayName || 'You', speaking: true, muted: false }]
 
   return (
-    <div className="space-y-5">
+    <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between rounded-lg bg-surface2 p-3">
         <div>
           <div className="text-sm font-medium">Show game overlay</div>
@@ -403,8 +443,8 @@ function HotkeysTab() {
   const setHotkeys = useSettingsStore((state) => state.setHotkeys)
 
   return (
-    <div className="space-y-3">
-      <p className="text-xs text-text-tertiary">Click a key to rebind. Modifier combos supported.</p>
+    <div className="flex flex-col">
+      <p className="mb-1 text-xs text-text-tertiary">Click a key to rebind. Modifier combos supported.</p>
       {(Object.keys(HOTKEY_LABELS) as (keyof HotkeyMap)[]).map((action) => (
         <Row key={action} label={HOTKEY_LABELS[action]}>
           <RebindPill
@@ -491,10 +531,10 @@ function SoundboardTab() {
   )
 
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col gap-1.5">
       <input ref={fileInputRef} type="file" accept="audio/*" className="hidden" onChange={handleFileChosen} />
       {soundboardFiles.map((file, slot) => (
-        <div key={slot} className="flex items-center gap-3 rounded-lg bg-surface2 p-3">
+        <div key={slot} className="flex items-center gap-3 rounded-lg bg-surface2 p-2">
           <span className="grid h-7 w-7 place-items-center rounded-full bg-accent/15 text-xs font-bold text-accent">
             {slot + 1}
           </span>
@@ -535,15 +575,15 @@ function SoundboardTab() {
 
 function AboutTab() {
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col items-center gap-2 pt-2">
-        <div className="grid h-14 w-14 place-items-center rounded-2xl bg-accent/15 text-accent">
-          <Ghost size={32} />
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col items-center gap-1">
+        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-accent/15 text-accent">
+          <Ghost size={26} />
         </div>
-        <div className="text-lg font-semibold">Wisp</div>
+        <div className="text-base font-semibold">Wisp</div>
         <div className="text-xs text-text-tertiary">v{packageJson.version}</div>
       </div>
-      <p className="text-center text-sm text-text-secondary">
+      <p className="text-center text-[13px] text-text-secondary">
         A featherweight voice chat for gamers. No accounts, no servers — just a code and your squad.
       </p>
       <div className="grid grid-cols-3 gap-2">
@@ -552,9 +592,9 @@ function AboutTab() {
           { v: '< 1%', l: 'CPU' },
           { v: 'E2E', l: 'encrypted' },
         ].map((s) => (
-          <div key={s.l} className="rounded-lg bg-surface2 p-3 text-center">
+          <div key={s.l} className="rounded-lg bg-surface2 p-2 text-center">
             <div className="text-sm font-semibold text-accent">{s.v}</div>
-            <div className="text-[11px] uppercase tracking-wider text-text-tertiary">{s.l}</div>
+            <div className="text-[10px] uppercase tracking-wider text-text-tertiary">{s.l}</div>
           </div>
         ))}
       </div>
@@ -562,11 +602,11 @@ function AboutTab() {
         href="https://github.com/chidhvilasa/wisp-voice"
         target="_blank"
         rel="noreferrer"
-        className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm hover:border-border-hover"
+        className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-1.5 text-sm hover:border-border-hover"
       >
         <ExternalLink size={14} /> View on GitHub
       </a>
-      <div className="flex items-center gap-2 rounded-lg border border-speaking/30 bg-speaking/10 p-3 text-xs">
+      <div className="flex items-center gap-2 rounded-lg border border-speaking/30 bg-speaking/10 p-2 text-xs">
         <Lock size={14} className="text-speaking" />
         <span className="text-speaking">DTLS-SRTP Encrypted</span>
       </div>
@@ -589,26 +629,26 @@ export default function Settings({ onClose }: SettingsProps) {
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         className={cn(
-          'flex w-[640px] max-w-[640px] max-h-[92vh] flex-col overflow-y-auto rounded-2xl border border-border bg-surface p-0',
+          'flex w-[600px] max-w-[600px] max-h-[95vh] flex-col rounded-2xl border border-border bg-surface p-0',
           'animate-fade-scale-in shadow-2xl',
         )}
       >
-        <header className="shrink-0 border-b border-border p-5 pb-4">
-          <h2 className="mb-4 text-lg font-semibold">Settings</h2>
+        <header className="shrink-0 border-b border-border px-5 py-4">
+          <h2 className="mb-2 text-base font-semibold">Settings</h2>
           <div className="flex items-center gap-3">
-            <Avatar id={displayName || 'You'} name={displayName || 'You'} size={36} />
+            <Avatar id={displayName || 'You'} name={displayName || 'You'} size={32} />
             <div className="text-sm font-medium">{displayName || 'You'}</div>
           </div>
         </header>
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Tab)} className="flex-col">
-          <TabsList className="h-auto w-full shrink-0 justify-start gap-1 rounded-none border-b border-border bg-transparent px-5">
+          <TabsList className="h-auto w-full shrink-0 justify-start gap-0.5 rounded-none border-b border-border bg-transparent px-5 py-2">
             {TABS.map((tab) => (
               <TabsTrigger
                 key={tab.id}
                 value={tab.id}
                 className={cn(
-                  'rounded-none border-b-2 border-transparent bg-transparent px-3 py-2.5 text-sm',
+                  'rounded-none border-b-2 border-transparent bg-transparent px-3 py-2 text-xs whitespace-nowrap',
                   'data-active:border-accent data-active:bg-transparent data-active:text-text-primary data-active:shadow-none',
                 )}
               >
@@ -617,7 +657,7 @@ export default function Settings({ onClose }: SettingsProps) {
             ))}
           </TabsList>
 
-          <div className="px-5 py-5">
+          <div className="px-5 py-3">
             <TabsContent value="audio" className="mt-0">
               <AudioTab />
             </TabsContent>

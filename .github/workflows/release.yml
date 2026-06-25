@@ -15,37 +15,63 @@ jobs:
       matrix:
         include:
           - platform: ubuntu-22.04
+            args: ''
           - platform: windows-latest
+            args: ''
           - platform: macos-latest
+            args: '--target universal-apple-darwin'
 
     runs-on: ${{ matrix.platform }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node 20
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - name: Install Ubuntu system dependencies
+      - name: Install Ubuntu dependencies
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
 
-      - name: Install dependencies
+      - name: Install frontend dependencies
         run: npm ci
 
       - name: Build Tauri app
-        run: npm run tauri build
-
-      - name: Upload release artifacts
-        uses: softprops/action-gh-release@v2
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          files: src-tauri/target/release/bundle/**/*
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Wisp ${{ github.ref_name }}'
+          releaseBody: |
+            ## Wisp ${{ github.ref_name }}
+
+            Lightweight gaming voice chat. No bloat. Just voice.
+
+            ### Download
+            - **Windows**: Download the `.msi` or `.exe` installer
+            - **macOS**: Download the `.dmg` file
+              > If macOS blocks the app: right-click → Open, or run `xattr -cr /Applications/Wisp.app` in Terminal
+            - **Linux**: Download the `.AppImage` or `.deb` file
+
+            ### What's new
+            - Dynamic peer grid layout
+            - Fixed connection status display
+            - Settings modal improvements
+            - Mic level meter
+            - Delete recent rooms
+            - Deafen now mutes outgoing audio
+
+            **RAM usage**: ~42MB (Discord uses ~400MB)
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
