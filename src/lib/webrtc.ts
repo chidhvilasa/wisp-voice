@@ -18,15 +18,25 @@ export interface WispVoiceEngineEvents {
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
+  { urls: 'stun:stun4.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  { urls: 'stun:stun.relay.metered.ca:80' },
   {
-    urls: 'turn:openrelay.metered.ca:80',
+    urls: [
+      'turn:openrelay.metered.ca:80',
+      'turn:openrelay.metered.ca:443',
+      'turn:openrelay.metered.ca:443?transport=tcp',
+      'turns:openrelay.metered.ca:443',
+    ],
     username: 'openrelayproject',
     credential: 'openrelayproject',
   },
   {
-    urls: 'turn:openrelay.metered.ca:443',
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
+    urls: ['turn:relay1.expressturn.com:3478'],
+    username: 'efQZ4N0PD4WcGMM2GS',
+    credential: 'XHy5m4JFKjbkfBmT',
   },
 ]
 
@@ -39,6 +49,8 @@ const SIGNAL_RATE_LIMIT_WINDOW_MS = 1000
 const MAX_CHAT_LENGTH = 500
 const SIGNALING_URL = 'https://wisp-signaling.chidhvilasa2004.workers.dev'
 const ICE_CONNECT_TIMEOUT_MS = 15000
+const ICE_RESTART_DELAY_MS = 2000
+const MAX_ICE_RESTART_ATTEMPTS = 2
 
 interface SignalMessage {
   type: string
@@ -83,6 +95,9 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
   private dataChannels: Map<string, RTCDataChannel> = new Map()
   private iceCandidateQueues: Map<string, RTCIceCandidateInit[]> = new Map()
   private iceTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map()
+  private iceRestartTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map()
+  private iceRestartAttempts: Map<string, number> = new Map()
+  private offererPeers: Set<string> = new Set()
   private gainNodes: Map<string, GainNode> = new Map()
   private peerVolumes: Map<string, number> = new Map()
   private statsIntervalId: ReturnType<typeof setInterval> | null = null
@@ -202,6 +217,13 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     }
     this.iceTimeouts.clear()
     this.iceCandidateQueues.clear()
+
+    for (const timeoutId of this.iceRestartTimeouts.values()) {
+      clearTimeout(timeoutId)
+    }
+    this.iceRestartTimeouts.clear()
+    this.iceRestartAttempts.clear()
+    this.offererPeers.clear()
 
     for (const vad of this.vadProcessors.values()) {
       vad.destroy()
@@ -570,6 +592,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
       return
     }
 
+    this.offererPeers.add(remoteId)
     const pc = this.createPeerConnection(remoteId)
     const channel = pc.createDataChannel(DATA_CHANNEL_LABEL)
     this.setupDataChannel(remoteId, channel)
@@ -580,8 +603,10 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
       }
     }
 
+    if (import.meta.env.DEV) console.log('[Wisp] Creating offer for', remoteId)
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
+    if (import.meta.env.DEV) console.log('[Wisp] Offer sent to', remoteId)
     this.send({ type: 'offer', to: remoteId, sdp: offer })
   }
 
@@ -591,6 +616,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
       return
     }
 
+    if (import.meta.env.DEV) console.log('[Wisp] Received offer from', remoteId)
     const pc = this.connections.get(remoteId) ?? this.createPeerConnection(remoteId)
 
     if (this.outgoingStream) {
@@ -600,6 +626,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     }
 
     await pc.setRemoteDescription(sdp)
+    if (import.meta.env.DEV) console.log('[Wisp] Remote description set for', remoteId)
     await this.flushIceCandidateQueue(remoteId, pc)
     const answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
@@ -610,6 +637,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     const pc = this.connections.get(remoteId)
     if (!pc) return
     await pc.setRemoteDescription(sdp)
+    if (import.meta.env.DEV) console.log('[Wisp] Remote description set for', remoteId)
     await this.flushIceCandidateQueue(remoteId, pc)
   }
 
@@ -648,11 +676,50 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
   }
 
   private createPeerConnection(remoteId: string): RTCPeerConnection {
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+    const pc = new RTCPeerConnection({
+      iceServers: ICE_SERVERS,
+      iceTransportPolicy: 'all',
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require',
+      iceCandidatePoolSize: 10,
+    })
 
     pc.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
       if (event.candidate) {
+        if (import.meta.env.DEV) {
+          console.log(
+            `[Wisp ICE candidate] type: ${event.candidate.type} protocol: ${event.candidate.protocol}`,
+          )
+        }
         this.send({ type: 'ice-candidate', to: remoteId, candidate: event.candidate })
+      }
+    }
+
+    pc.oniceconnectionstatechange = () => {
+      if (import.meta.env.DEV) {
+        console.log(`[Wisp ICE] ${remoteId}: ${pc.iceConnectionState}`)
+      }
+      if (pc.iceConnectionState === 'failed') {
+        console.error(`[Wisp ICE] FAILED for peer ${remoteId} - trying restart`)
+        this.scheduleIceRestart(remoteId, pc)
+      }
+      if (pc.iceConnectionState === 'disconnected') {
+        console.warn(`[Wisp ICE] Disconnected from ${remoteId}`)
+      }
+      if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+        this.clearIceRestart(remoteId)
+      }
+    }
+
+    pc.onicegatheringstatechange = () => {
+      if (import.meta.env.DEV) {
+        console.log(`[Wisp ICE gather] ${remoteId}: ${pc.iceGatheringState}`)
+      }
+    }
+
+    pc.onsignalingstatechange = () => {
+      if (import.meta.env.DEV) {
+        console.log(`[Wisp signaling] ${remoteId}: ${pc.signalingState}`)
       }
     }
 
@@ -770,13 +837,65 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
       this.clearIceTimeout(remoteId)
       this.emit('peer-joined', remoteId)
       this.setConnectionState('connected')
-    } else if (
-      pc.connectionState === 'failed' ||
-      pc.connectionState === 'disconnected' ||
-      pc.connectionState === 'closed'
-    ) {
+    } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'closed') {
       this.cleanupPeer(remoteId)
       this.emit('peer-left', remoteId)
+    }
+    // 'failed' is handled via oniceconnectionstatechange (scheduleIceRestart), which
+    // gives ICE restart a chance before tearing the connection down.
+  }
+
+  private scheduleIceRestart(remoteId: string, pc: RTCPeerConnection): void {
+    if (this.iceRestartTimeouts.has(remoteId)) return
+    const timeoutId = setTimeout(() => {
+      this.iceRestartTimeouts.delete(remoteId)
+      void this.attemptIceRestart(remoteId, pc)
+    }, ICE_RESTART_DELAY_MS)
+    this.iceRestartTimeouts.set(remoteId, timeoutId)
+  }
+
+  private clearIceRestart(remoteId: string): void {
+    const timeoutId = this.iceRestartTimeouts.get(remoteId)
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId)
+      this.iceRestartTimeouts.delete(remoteId)
+    }
+    this.iceRestartAttempts.delete(remoteId)
+  }
+
+  private async attemptIceRestart(remoteId: string, pc: RTCPeerConnection): Promise<void> {
+    if (pc.iceConnectionState !== 'failed') return
+    if (!this.connections.has(remoteId)) return
+
+    const giveUp = () => {
+      this.emit('error', new Error('Connection failed. You may be behind a strict firewall.'))
+      this.cleanupPeer(remoteId)
+      this.emit('peer-left', remoteId)
+    }
+
+    if (!this.offererPeers.has(remoteId)) {
+      // Only the side that originally offered restarts ICE; the other side just
+      // answers the incoming restart offer via the normal handleOffer() path.
+      // If no restart offer arrives and ICE never recovers, the connection will
+      // eventually close and be cleaned up via the 'closed' transition above.
+      return
+    }
+
+    const attempts = (this.iceRestartAttempts.get(remoteId) ?? 0) + 1
+    if (attempts > MAX_ICE_RESTART_ATTEMPTS) {
+      giveUp()
+      return
+    }
+    this.iceRestartAttempts.set(remoteId, attempts)
+
+    console.warn('[Wisp] ICE failed, attempting restart for', remoteId)
+    try {
+      const offer = await pc.createOffer({ iceRestart: true })
+      await pc.setLocalDescription(offer)
+      this.send({ type: 'offer', to: remoteId, sdp: offer })
+    } catch (err) {
+      console.error('[Wisp] ICE restart failed:', err)
+      giveUp()
     }
   }
 
@@ -790,6 +909,8 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
 
   private cleanupPeer(peerId: string): void {
     this.clearIceTimeout(peerId)
+    this.clearIceRestart(peerId)
+    this.offererPeers.delete(peerId)
     this.iceCandidateQueues.delete(peerId)
 
     const pc = this.connections.get(peerId)

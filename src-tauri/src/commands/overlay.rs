@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use tauri::{AppHandle, LogicalPosition, Manager, Position, WebviewWindow};
+use tauri::{AppHandle, Manager, PhysicalPosition, Position, WebviewWindow};
 
 const OVERLAY_WINDOW_LABEL: &str = "overlay";
 const OVERLAY_POSITION_FILE: &str = "overlay_pos.json";
@@ -60,11 +60,13 @@ pub fn hide_overlay(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn set_overlay_position(app: AppHandle, x: i32, y: i32) -> Result<(), String> {
     let window = overlay_window(&app)?;
+    // x/y arrive as physical pixels (Tauri's JS `currentMonitor()` reports
+    // PhysicalPosition/PhysicalSize), so they must be applied as a physical
+    // position. Using a logical position here would scale them again by the
+    // monitor's DPI factor, which is barely noticeable near the top-left
+    // origin but throws far corners off-screen on scaled displays.
     window
-        .set_position(Position::Logical(LogicalPosition::new(
-            f64::from(x),
-            f64::from(y),
-        )))
+        .set_position(Position::Physical(PhysicalPosition::new(x, y)))
         .map_err(|e| e.to_string())?;
 
     let path = overlay_position_path(&app)?;

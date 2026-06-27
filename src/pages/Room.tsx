@@ -33,6 +33,21 @@ function navigate(path: string): void {
   window.location.hash = path
 }
 
+function troubleshootingFor(error: string | null): string {
+  if (!error) return 'Something went wrong. Please try again.'
+  const lower = error.toLowerCase()
+  if (lower.includes('ice') || lower.includes('firewall') || lower.includes('p2p')) {
+    return 'Could not establish P2P connection. Both devices may be behind strict firewalls. Try: both users disable VPN, or connect to the same WiFi.'
+  }
+  if (lower.includes('microphone')) {
+    return 'Microphone access denied. Grant permission in system settings.'
+  }
+  if (lower.includes('room')) {
+    return 'Room not found or expired. Create a new room.'
+  }
+  return error
+}
+
 function signalFromQuality(quality: ConnectionQuality): 1 | 2 | 3 {
   if (quality === 'good') return 3
   if (quality === 'ok') return 2
@@ -62,6 +77,7 @@ export default function Room() {
   const localSpeaking = useVoiceStore((state) => state.localSpeaking)
   const isHost = useVoiceStore((state) => state.isHost)
   const chatMessages = useVoiceStore((state) => state.chatMessages)
+  const lastError = useVoiceStore((state) => state.lastError)
 
   const [localStream, setLocalStream] = useState<MediaStream | null>(null)
   useEffect(() => {
@@ -167,12 +183,12 @@ export default function Room() {
           )}
           {connectionState === 'error' && (
             <div className="flex items-center justify-center gap-3 bg-muted-red/20 px-4 py-2 text-sm text-muted-red">
-              <AlertCircle className="h-4 w-4" />
-              Connection lost.
+              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              <span>{troubleshootingFor(lastError)}</span>
               <button
                 type="button"
                 onClick={handleRetry}
-                className="rounded bg-muted-red/30 px-2 py-1 text-xs font-medium text-text-primary hover:bg-muted-red/40"
+                className="flex-shrink-0 rounded bg-muted-red/30 px-2 py-1 text-xs font-medium text-text-primary hover:bg-muted-red/40"
               >
                 Retry
               </button>
@@ -312,6 +328,24 @@ export default function Room() {
                       onVolumeChange={(v) => handleVolumeChange(peer.id, v)}
                     />
                   ))}
+                </div>
+              )}
+
+              {connectionState === 'connecting' && (
+                <div className="mt-6 flex w-full max-w-xs flex-col gap-2 rounded-card border border-border bg-surface p-4 text-sm">
+                  <span className="mb-1 font-medium text-text-primary">Establishing connection...</span>
+                  <div className="flex items-center gap-2 text-text-secondary">
+                    <Check size={14} className="text-speaking" />
+                    <span>Connected to server</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-text-secondary">
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Exchanging connection info...</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-text-secondary">
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Finding network path...</span>
+                  </div>
                 </div>
               )}
             </div>

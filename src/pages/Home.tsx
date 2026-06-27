@@ -4,6 +4,7 @@ import { createRoom, getRecentRooms, joinRoom, removeRecentRoom, saveRecentRoom 
 import { useSettingsStore } from '../store/settingsStore'
 import { useVoiceStore } from '../store/voiceStore'
 import ResourceWidget from '../components/ResourceWidget'
+import { UpdateBanner } from '../components/UpdateBanner'
 import { WispLogo } from '../components/wisp/WispLogo'
 import { Avatar } from '../components/wisp/Avatar'
 import { cn } from '../lib/utils'
@@ -146,10 +147,12 @@ export default function Home() {
   return (
     <main className="flex min-h-screen justify-center overflow-y-auto bg-bg px-6 py-10">
       <div className="w-full max-w-[460px] space-y-6">
+        <UpdateBanner />
+
         <header className="flex items-center justify-between">
           <WispLogo />
           <span className="rounded-full border border-border bg-surface2 px-2.5 py-1 text-[11px] text-text-tertiary">
-            v0.2.0
+            v0.3.0
           </span>
         </header>
 

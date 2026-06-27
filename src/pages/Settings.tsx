@@ -10,6 +10,7 @@ import {
   CornerUpRight,
   ExternalLink,
   Ghost,
+  Loader2,
   Lock,
   Play,
   Trash2,
@@ -21,6 +22,7 @@ import { Slider } from '../components/ui/slider'
 import { Switch } from '../components/ui/switch'
 import { useSettingsStore } from '../store/settingsStore'
 import { getInputDevices, getLabelOrDefault, getOutputDevices } from '../lib/devices'
+import { checkForUpdate, installUpdate } from '../lib/updater'
 import ResourceWidget from '../components/ResourceWidget'
 import { Avatar } from '../components/wisp/Avatar'
 import { RebindPill } from '../components/wisp/RebindPill'
@@ -573,7 +575,28 @@ function SoundboardTab() {
   )
 }
 
+type UpdateCheckStatus = 'idle' | 'checking' | 'up-to-date' | 'available' | 'installing'
+
 function AboutTab() {
+  const [updateStatus, setUpdateStatus] = useState<UpdateCheckStatus>('idle')
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null)
+
+  const handleCheckForUpdates = useCallback(async () => {
+    setUpdateStatus('checking')
+    const info = await checkForUpdate()
+    if (info.available && info.version) {
+      setUpdateVersion(info.version)
+      setUpdateStatus('available')
+    } else {
+      setUpdateStatus('up-to-date')
+    }
+  }, [])
+
+  const handleInstallUpdate = useCallback(() => {
+    setUpdateStatus('installing')
+    void installUpdate().catch(() => setUpdateStatus('available'))
+  }, [])
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col items-center gap-1">
@@ -586,6 +609,35 @@ function AboutTab() {
       <p className="text-center text-[13px] text-text-secondary">
         A featherweight voice chat for gamers. No accounts, no servers — just a code and your squad.
       </p>
+
+      <div className="flex flex-col items-center gap-1.5 rounded-lg bg-surface2 p-2.5">
+        {updateStatus === 'available' ? (
+          <button
+            type="button"
+            onClick={handleInstallUpdate}
+            className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-accent-hover"
+          >
+            Update to {updateVersion}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void handleCheckForUpdates()}
+            disabled={updateStatus === 'checking' || updateStatus === 'installing'}
+            className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs hover:border-border-hover disabled:opacity-60"
+          >
+            {(updateStatus === 'checking' || updateStatus === 'installing') && (
+              <Loader2 size={12} className="animate-spin" />
+            )}
+            {updateStatus === 'checking' && 'Checking...'}
+            {updateStatus === 'installing' && 'Installing...'}
+            {(updateStatus === 'idle' || updateStatus === 'up-to-date') && 'Check for updates'}
+          </button>
+        )}
+        {updateStatus === 'up-to-date' && (
+          <span className="text-[11px] text-text-tertiary">You are on the latest version (v{packageJson.version})</span>
+        )}
+      </div>
       <div className="grid grid-cols-3 gap-2">
         {[
           { v: '< 50 MB', l: 'memory' },

@@ -48,6 +48,7 @@ export function useVoice(): UseVoiceResult {
   const setPreviousMutedState = useVoiceStore((state) => state.setPreviousMutedState)
   const setConnectionState = useVoiceStore((state) => state.setConnectionState)
   const addChatMessage = useVoiceStore((state) => state.addChatMessage)
+  const setLastError = useVoiceStore((state) => state.setLastError)
   const resetVoiceStore = useVoiceStore((state) => state.reset)
 
   const schedulerRef = useRef<ReturnType<typeof createReconnectScheduler> | null>(null)
@@ -67,6 +68,7 @@ export function useVoice(): UseVoiceResult {
       lastRoomRef.current = { code: roomCode, displayName }
       setRoomCode(roomCode)
       setDisplayName(displayName)
+      setLastError(null)
       schedulerRef.current?.reset()
 
       try {
@@ -75,7 +77,7 @@ export function useVoice(): UseVoiceResult {
         schedulerRef.current?.scheduleReconnect()
       }
     },
-    [setRoomCode, setDisplayName],
+    [setRoomCode, setDisplayName, setLastError],
   )
 
   const disconnect = useCallback(() => {
@@ -159,6 +161,7 @@ export function useVoice(): UseVoiceResult {
       debug('connection-state-change', state)
       setConnectionState(state)
       if (state === 'connected') {
+        setLastError(null)
         schedulerRef.current?.reset()
         const { roomCode, displayName } = useVoiceStore.getState()
         if (roomCode) {
@@ -186,6 +189,7 @@ export function useVoice(): UseVoiceResult {
 
     const handleError = (error: Error) => {
       debug('error', error)
+      setLastError(error.message)
       schedulerRef.current?.scheduleReconnect()
     }
 
@@ -209,7 +213,7 @@ export function useVoice(): UseVoiceResult {
       engine.off('error', handleError)
       schedulerRef.current?.cancel()
     }
-  }, [setPeer, removePeer, setConnectionState, addChatMessage])
+  }, [setPeer, removePeer, setConnectionState, addChatMessage, setLastError])
 
   useEffect(() => {
     const unsubscribe = useSettingsStore.subscribe((state, prevState) => {

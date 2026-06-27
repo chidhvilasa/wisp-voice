@@ -23,6 +23,7 @@ interface VoiceState {
   isHost: boolean
   connectionState: ConnectionState
   chatMessages: ChatMessage[]
+  lastError: string | null
   setRoomCode: (roomCode: string) => void
   setDisplayName: (displayName: string) => void
   setPeer: (peer: Peer) => void
@@ -34,6 +35,7 @@ interface VoiceState {
   setIsHost: (isHost: boolean) => void
   setConnectionState: (state: ConnectionState) => void
   addChatMessage: (message: ChatMessage) => void
+  setLastError: (error: string | null) => void
   reset: () => void
 }
 
@@ -48,6 +50,7 @@ const initialState = {
   isHost: false,
   connectionState: 'idle' as ConnectionState,
   chatMessages: [] as ChatMessage[],
+  lastError: null as string | null,
 }
 
 export const useVoiceStore = create<VoiceState>((set) => ({
@@ -94,6 +97,8 @@ export const useVoiceStore = create<VoiceState>((set) => ({
 
   addChatMessage: (message) =>
     set((state) => ({ chatMessages: [...state.chatMessages, message] })),
+
+  setLastError: (lastError) => set({ lastError }),
 
   reset: () =>
     set({
