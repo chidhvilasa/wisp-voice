@@ -8,6 +8,8 @@ export function ConnectionStatus() {
 
   const connectionState = useVoiceStore((state) => state.connectionState);
   const peers = useVoiceStore((state) => state.peers);
+  const roomCode = useVoiceStore((state) => state.roomCode);
+  const lastError = useVoiceStore((state) => state.lastError);
 
   React.useEffect(() => {
     function handler(e: MouseEvent) {
@@ -21,7 +23,9 @@ export function ConnectionStatus() {
   let label = "Not connected";
   let pulsing = false;
 
-  if (connectionState === "connecting") {
+  if (connectionState === "idle" && roomCode) {
+    label = "In room, waiting...";
+  } else if (connectionState === "connecting") {
     dotColor = "bg-warning";
     label = "Connecting...";
     pulsing = true;
@@ -31,7 +35,7 @@ export function ConnectionStatus() {
     pulsing = true;
   } else if (connectionState === "error") {
     dotColor = "bg-muted-red";
-    label = "Connection error";
+    label = lastError ?? "Connection error";
   } else if (connectionState === "connected") {
     dotColor = "bg-speaking";
     label =

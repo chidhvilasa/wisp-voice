@@ -34,11 +34,20 @@ const ICE_SERVERS: RTCIceServer[] = [
     credential: 'openrelayproject',
   },
   {
-    urls: ['turn:relay1.expressturn.com:3478'],
-    username: 'efQZ4N0PD4WcGMM2GS',
-    credential: 'XHy5m4JFKjbkfBmT',
+    urls: [
+      'turn:a.relay.metered.ca:80',
+      'turn:a.relay.metered.ca:80?transport=tcp',
+      'turn:a.relay.metered.ca:443',
+      'turn:a.relay.metered.ca:443?transport=tcp',
+    ],
+    username: 'e8dd65f42a7f0b8f9f0eb9e0',
+    credential: 'uR6LBDRkn3JKXL9/',
   },
 ]
+// TODO: replace these static/shared TURN credentials with the
+// /turn-credentials endpoint on the signaling worker once a Metered.ca
+// API key is provisioned (see server/src/index.ts). Per-session credentials
+// with a short TTL are more abuse-resistant than hardcoded ones.
 
 const MAX_REMOTE_PEERS = 3
 const STATS_INTERVAL_MS = 2000
@@ -593,6 +602,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     }
 
     this.offererPeers.add(remoteId)
+    if (import.meta.env.DEV) console.log('[Wisp] role: initiator for', remoteId)
     const pc = this.createPeerConnection(remoteId)
     const channel = pc.createDataChannel(DATA_CHANNEL_LABEL)
     this.setupDataChannel(remoteId, channel)
@@ -617,6 +627,10 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     }
 
     if (import.meta.env.DEV) console.log('[Wisp] Received offer from', remoteId)
+    const isNewConnection = !this.connections.has(remoteId)
+    if (isNewConnection && import.meta.env.DEV) {
+      console.log('[Wisp] role: receiver for', remoteId)
+    }
     const pc = this.connections.get(remoteId) ?? this.createPeerConnection(remoteId)
 
     if (this.outgoingStream) {

@@ -36,7 +36,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' tauri: ipc: asset: https://asset.localhost; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; connect-src * ws: wss:; media-src 'self' mediastream: blob: data:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset:",
+      "csp": "default-src 'self' tauri: ipc: asset: https://asset.localhost; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; connect-src 'self' tauri: ipc: https://wisp-signaling.chidhvilasa2004.workers.dev wss://wisp-signaling.chidhvilasa2004.workers.dev; media-src 'self' mediastream: blob: data:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset:",
       "dangerousDisableAssetCspModification": false
     }
   },
@@ -54,7 +54,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMwNDMyNTI0OEU1RDQ3QTMKUldTalIxMk9KQ1ZETU9KcDg1Q2dTK2lmRFJWNnZYTkVkZ0xXZytCL202alVncHBUVGxOcDBJRGcK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM5Qjk0MzIxNzk3MkIyQjcKUldTM3NuSjVJVU81T1I1MWlCMnRETmZJUnY5cnROM3RGYjVBUlVNaVdNK0N5Zm1XWDBWcWlVZDEK",
       "endpoints": [
         "https://github.com/chidhvilasa/wisp-voice/releases/latest/download/latest.json"
       ],

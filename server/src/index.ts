@@ -116,6 +116,10 @@ export class WispRoom {
     this.peers.delete(peerId)
     this.rateLimits.delete(peerId)
     this.broadcast({ type: 'peer-left', peerId })
+
+    if (this.peers.size === 0) {
+      void this.state.storage.delete('created')
+    }
   }
 
   private isRateLimited(peerId: string): boolean {
