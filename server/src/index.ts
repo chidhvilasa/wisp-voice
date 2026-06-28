@@ -166,12 +166,46 @@ const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Headers': 'Content-Type',
 }
 
+// Served from the worker (rather than hardcoded in the client bundle) so TURN
+// credentials can be rotated without shipping a new app release.
+const ICE_SERVERS = [
+  { urls: ['stun:stun.l.google.com:19302'] },
+  { urls: ['stun:stun1.l.google.com:19302'] },
+  { urls: ['stun:stun.cloudflare.com:3478'] },
+  {
+    urls: [
+      'turn:openrelay.metered.ca:80',
+      'turn:openrelay.metered.ca:443',
+      'turn:openrelay.metered.ca:443?transport=tcp',
+      'turns:openrelay.metered.ca:443',
+    ],
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+  {
+    urls: [
+      'turn:a.relay.metered.ca:80',
+      'turn:a.relay.metered.ca:80?transport=tcp',
+      'turn:a.relay.metered.ca:443',
+      'turn:a.relay.metered.ca:443?transport=tcp',
+    ],
+    username: 'e8dd65f42a7f0b8f9f0eb9e0',
+    credential: 'uR6LBDRkn3JKXL9/',
+  },
+]
+
 async function handleRequest(request: Request, env: Env): Promise<Response> {
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS })
   }
 
   const url = new URL(request.url)
+
+  if (request.method === 'GET' && url.pathname === '/ice-servers') {
+    return new Response(JSON.stringify(ICE_SERVERS), {
+      headers: { 'content-type': 'application/json', ...CORS_HEADERS },
+    })
+  }
 
   if (request.method === 'POST' && url.pathname === '/room') {
     const code = generateRoomCode()

@@ -20,6 +20,7 @@ import { useVoice } from '../hooks/useVoice'
 import { useVAD } from '../hooks/useVAD'
 import { useVoiceStore } from '../store/voiceStore'
 import { getVoiceEngine, lockRoom } from '../lib/rooms'
+import type { WispVoiceEngine } from '../lib/webrtc'
 import MicMeter from '../components/MicMeter'
 import Settings from './Settings'
 import { PeerCard } from '../components/wisp/PeerCard'
@@ -33,6 +34,8 @@ import type { ConnectionQuality, Peer } from '../types'
 function navigate(path: string): void {
   window.location.hash = path
 }
+
+type PeerDebugInfo = ReturnType<WispVoiceEngine['getDebugInfo']>[number]
 
 function troubleshootingFor(error: string | null): string {
   if (!error) return 'Something went wrong. Please try again.'
@@ -97,9 +100,7 @@ export default function Room() {
   const [emptyStateCopied, setEmptyStateCopied] = useState(false)
   const [volumes, setVolumes] = useState<Record<string, number>>({})
 
-  const [debugInfo, setDebugInfo] = useState<
-    { peerId: string; connectionState: string; iceConnectionState: string }[]
-  >([])
+  const [debugInfo, setDebugInfo] = useState<PeerDebugInfo[]>([])
   useEffect(() => {
     if (!showDebug) return
     const update = () => setDebugInfo(getVoiceEngine().getDebugInfo())
@@ -383,9 +384,14 @@ export default function Room() {
                       <div>(no peer connections)</div>
                     ) : (
                       debugInfo.map((d) => (
-                        <div key={d.peerId}>
-                          {d.peerId.slice(0, 6)}: connectionState={d.connectionState} iceConnectionState=
-                          {d.iceConnectionState}
+                        <div key={d.peerId} className="mb-1.5">
+                          <div>{d.peerId.slice(0, 6)}:</div>
+                          <div className="pl-2">connectionState={d.connectionState}</div>
+                          <div className="pl-2">iceConnectionState={d.iceConnectionState}</div>
+                          <div className="pl-2">iceGatheringState={d.iceGatheringState}</div>
+                          <div className="pl-2">signalingState={d.signalingState}</div>
+                          <div className="pl-2">candidates={d.candidateCount}</div>
+                          <div className="pl-2">relayFound={String(d.hasRelayCandidate)}</div>
                         </div>
                       ))
                     )}

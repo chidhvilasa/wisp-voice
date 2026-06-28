@@ -24,6 +24,8 @@ const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun4.l.google.com:19302' },
   { urls: 'stun:stun.cloudflare.com:3478' },
   { urls: 'stun:stun.relay.metered.ca:80' },
+  { urls: 'stun:stun.nextcloud.com:443' },
+  { urls: 'stun:stun.sipgate.net:3478' },
   {
     urls: [
       'turn:openrelay.metered.ca:80',
@@ -44,11 +46,22 @@ const ICE_SERVERS: RTCIceServer[] = [
     username: 'e8dd65f42a7f0b8f9f0eb9e0',
     credential: 'uR6LBDRkn3JKXL9/',
   },
+  {
+    urls: 'turn:numb.viagenie.ca',
+    username: 'webrtc@live.com',
+    credential: 'muazkh',
+  },
+  {
+    urls: 'turn:turn.bistri.com:80',
+    username: 'homeo',
+    credential: 'homeo',
+  },
 ]
 // TODO: replace these static/shared TURN credentials with the
 // /turn-credentials endpoint on the signaling worker once a Metered.ca
 // API key is provisioned (see server/src/index.ts). Per-session credentials
 // with a short TTL are more abuse-resistant than hardcoded ones.
+const ICE_SERVERS_FETCH_TIMEOUT_MS = 3000
 
 const MAX_REMOTE_PEERS = 3
 const STATS_INTERVAL_MS = 2000
@@ -61,6 +74,7 @@ const SIGNALING_URL = 'https://wisp-signaling.chidhvilasa2004.workers.dev'
 const ICE_CONNECT_TIMEOUT_MS = 15000
 const ICE_RESTART_DELAY_MS = 2000
 const MAX_ICE_RESTART_ATTEMPTS = 2
+const ICE_GATHERING_WARN_MS = 10000
 
 interface SignalMessage {
   type: string
@@ -108,6 +122,8 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
   private iceRestartTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map()
   private iceRestartAttempts: Map<string, number> = new Map()
   private offererPeers: Set<string> = new Set()
+  private iceServers: RTCIceServer[] = ICE_SERVERS
+  private iceCandidateStats: Map<string, { count: number; hasRelay: boolean }> = new Map()
   private gainNodes: Map<string, GainNode> = new Map()
   private peerVolumes: Map<string, number> = new Map()
   private statsIntervalId: ReturnType<typeof setInterval> | null = null
@@ -133,6 +149,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     this.roomCode = roomCode
     this.displayName = displayName
     this.setConnectionState('connecting')
+    void this.refreshIceServers()
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       this.setConnectionState('error')
@@ -234,6 +251,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     this.iceRestartTimeouts.clear()
     this.iceRestartAttempts.clear()
     this.offererPeers.clear()
+    this.iceCandidateStats.clear()
 
     for (const vad of this.vadProcessors.values()) {
       vad.destroy()
@@ -411,12 +429,27 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     return this.displayName
   }
 
-  getDebugInfo(): { peerId: string; connectionState: string; iceConnectionState: string }[] {
-    return Array.from(this.connections.entries()).map(([peerId, pc]) => ({
-      peerId,
-      connectionState: pc.connectionState,
-      iceConnectionState: pc.iceConnectionState,
-    }))
+  getDebugInfo(): {
+    peerId: string
+    connectionState: string
+    iceConnectionState: string
+    iceGatheringState: string
+    signalingState: string
+    candidateCount: number
+    hasRelayCandidate: boolean
+  }[] {
+    return Array.from(this.connections.entries()).map(([peerId, pc]) => {
+      const stats = this.iceCandidateStats.get(peerId)
+      return {
+        peerId,
+        connectionState: pc.connectionState,
+        iceConnectionState: pc.iceConnectionState,
+        iceGatheringState: pc.iceGatheringState,
+        signalingState: pc.signalingState,
+        candidateCount: stats?.count ?? 0,
+        hasRelayCandidate: stats?.hasRelay ?? false,
+      }
+    })
   }
 
   setDuckAmount(amount: number): void {
@@ -529,6 +562,28 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
 
   private emitNegotiationError(error: unknown): void {
     this.emit('error', error instanceof Error ? error : new Error('WebRTC negotiation failed'))
+  }
+
+  private async refreshIceServers(): Promise<void> {
+    // Skip the real network call under the test runner; tests don't stub
+    // fetch globally, and unit tests shouldn't depend on a live endpoint.
+    if (import.meta.env.MODE === 'test') return
+
+    try {
+      const res = await fetch(`${SIGNALING_URL}/ice-servers`, {
+        signal: AbortSignal.timeout(ICE_SERVERS_FETCH_TIMEOUT_MS),
+      })
+      if (!res.ok) return
+      const servers = (await res.json()) as RTCIceServer[]
+      if (Array.isArray(servers) && servers.length > 0) {
+        this.iceServers = servers
+      }
+    } catch {
+      if (import.meta.env.DEV) {
+        console.warn('[Wisp] Failed to fetch ICE servers, using fallback')
+      }
+      // this.iceServers already defaults to the static ICE_SERVERS fallback
+    }
   }
 
   private send(message: SignalMessage): void {
@@ -711,12 +766,14 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
 
   private createPeerConnection(remoteId: string): RTCPeerConnection {
     const pc = new RTCPeerConnection({
-      iceServers: ICE_SERVERS,
+      iceServers: this.iceServers,
       iceTransportPolicy: 'all',
       bundlePolicy: 'max-bundle',
       rtcpMuxPolicy: 'require',
       iceCandidatePoolSize: 10,
     })
+
+    this.iceCandidateStats.set(remoteId, { count: 0, hasRelay: false })
 
     pc.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
       if (event.candidate) {
@@ -725,7 +782,12 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
             `[Wisp ICE candidate] type: ${event.candidate.type} protocol: ${event.candidate.protocol}`,
           )
         }
-        this.send({ type: 'ice-candidate', to: remoteId, candidate: event.candidate })
+        const stats = this.iceCandidateStats.get(remoteId) ?? { count: 0, hasRelay: false }
+        stats.count += 1
+        if (event.candidate.type === 'relay') stats.hasRelay = true
+        this.iceCandidateStats.set(remoteId, stats)
+
+        this.send({ type: 'ice-candidate', to: remoteId, candidate: event.candidate.toJSON() })
       }
     }
 
@@ -745,9 +807,21 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
       }
     }
 
+    let gatheringTimeoutId: ReturnType<typeof setTimeout> | undefined
     pc.onicegatheringstatechange = () => {
       if (import.meta.env.DEV) {
         console.log(`[Wisp ICE gather] ${remoteId}: ${pc.iceGatheringState}`)
+      }
+      if (pc.iceGatheringState === 'gathering') {
+        gatheringTimeoutId = setTimeout(() => {
+          if (import.meta.env.DEV) {
+            console.warn(`[Wisp] ICE gathering for ${remoteId} still running after 10s`)
+          }
+        }, ICE_GATHERING_WARN_MS)
+      }
+      if (pc.iceGatheringState === 'complete' && gatheringTimeoutId !== undefined) {
+        clearTimeout(gatheringTimeoutId)
+        gatheringTimeoutId = undefined
       }
     }
 
@@ -946,6 +1020,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     this.clearIceRestart(peerId)
     this.offererPeers.delete(peerId)
     this.iceCandidateQueues.delete(peerId)
+    this.iceCandidateStats.delete(peerId)
 
     const pc = this.connections.get(peerId)
     if (pc) {

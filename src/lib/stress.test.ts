@@ -217,7 +217,8 @@ class MockRTCPeerConnection {
   async setLocalDescription(desc: { type: string; sdp: string }): Promise<void> {
     this.localDescription = desc
     queueMicrotask(() => {
-      this.onicecandidate?.({ candidate: { candidate: `cand-${this.id}`, sdpMid: '0' } })
+      const candidate = { candidate: `cand-${this.id}`, sdpMid: '0', type: 'host' }
+      this.onicecandidate?.({ candidate: { ...candidate, toJSON: () => candidate } })
       this.onicecandidate?.({ candidate: null })
     })
     this.tryLink()
