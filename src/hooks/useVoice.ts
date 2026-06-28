@@ -123,16 +123,33 @@ export function useVoice(): UseVoiceResult {
       if (import.meta.env.DEV) console.error(`[wisp:engine] ${event}`, ...details)
     }
 
-    const handlePeerJoined = (peerId: string) => {
-      debug('peer-joined', peerId)
+    const handlePeerDiscovered = (peerId: string, name: string) => {
+      debug('peer-discovered', peerId, name)
+      const existing = useVoiceStore.getState().peers.get(peerId)
       setPeer({
         id: peerId,
-        name: peerId,
-        muted: false,
-        deafened: false,
-        speaking: false,
-        quality: 'good',
-        latencyMs: 0,
+        name: name || existing?.name || peerId.slice(0, 8),
+        muted: existing?.muted ?? false,
+        deafened: existing?.deafened ?? false,
+        speaking: existing?.speaking ?? false,
+        quality: existing?.quality ?? 'good',
+        latencyMs: existing?.latencyMs ?? 0,
+        connecting: true,
+      })
+    }
+
+    const handlePeerJoined = (peerId: string) => {
+      debug('peer-joined', peerId)
+      const existing = useVoiceStore.getState().peers.get(peerId)
+      setPeer({
+        id: peerId,
+        name: existing?.name ?? peerId.slice(0, 8),
+        muted: existing?.muted ?? false,
+        deafened: existing?.deafened ?? false,
+        speaking: existing?.speaking ?? false,
+        quality: existing?.quality ?? 'good',
+        latencyMs: existing?.latencyMs ?? 0,
+        connecting: false,
       })
     }
 
@@ -193,6 +210,7 @@ export function useVoice(): UseVoiceResult {
       schedulerRef.current?.scheduleReconnect()
     }
 
+    engine.on('peer-discovered', handlePeerDiscovered)
     engine.on('peer-joined', handlePeerJoined)
     engine.on('peer-left', handlePeerLeft)
     engine.on('peer-name', handlePeerName)
@@ -203,6 +221,7 @@ export function useVoice(): UseVoiceResult {
     engine.on('error', handleError)
 
     return () => {
+      engine.off('peer-discovered', handlePeerDiscovered)
       engine.off('peer-joined', handlePeerJoined)
       engine.off('peer-left', handlePeerLeft)
       engine.off('peer-name', handlePeerName)

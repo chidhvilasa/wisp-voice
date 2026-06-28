@@ -315,12 +315,12 @@ class MockSignalingRoom {
 
     const peerId = `PEER${++this.counter}-${generateId()}`
     ws.peerId = peerId
-    const existingPeers = Array.from(this.peers.keys())
+    const existingPeers = Array.from(this.peers.keys()).map((id) => ({ id, name: '' }))
     this.peers.set(peerId, ws)
     ws.deliver({ type: 'joined', peerId, existingPeers })
     for (const [id, otherWs] of this.peers) {
       if (id === peerId) continue
-      otherWs.deliver({ type: 'peer-joined', peerId })
+      otherWs.deliver({ type: 'peer-joined', peerId, name: '' })
     }
   }
 

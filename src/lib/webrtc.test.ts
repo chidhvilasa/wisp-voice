@@ -236,17 +236,22 @@ function installRTCPeerConnection(): void {
 
 class MockSignalingRoom {
   private peers: Map<string, MockWebSocket> = new Map()
+  private peerNames: Map<string, string> = new Map()
   private counter = 0
 
-  join(ws: MockWebSocket): void {
+  join(ws: MockWebSocket, name: string): void {
     const peerId = `PEER${++this.counter}-${generateId()}`
     ws.peerId = peerId
-    const existingPeers = Array.from(this.peers.keys())
+    const existingPeers = Array.from(this.peers.keys()).map((id) => ({
+      id,
+      name: this.peerNames.get(id) ?? '',
+    }))
     this.peers.set(peerId, ws)
+    this.peerNames.set(peerId, name)
     ws.deliver({ type: 'joined', peerId, existingPeers })
     for (const [id, otherWs] of this.peers) {
       if (id === peerId) continue
-      otherWs.deliver({ type: 'peer-joined', peerId })
+      otherWs.deliver({ type: 'peer-joined', peerId, name })
     }
   }
 
@@ -282,6 +287,8 @@ class MockWebSocket {
   constructor(public url: string) {
     const match = /\/room\/([^/]+)\/ws/.exec(url)
     const code = match?.[1] ?? 'DEFAULT'
+    const nameMatch = /name=([^&]*)/.exec(url)
+    const name = nameMatch?.[1] ? decodeURIComponent(nameMatch[1]) : ''
 
     if (MockWebSocket.refusedCodes.has(code)) {
       // Simulates the signaling server closing the connection (e.g. a 404
@@ -303,7 +310,7 @@ class MockWebSocket {
     queueMicrotask(() => {
       this.readyState = 1
       this.onopen?.()
-      this.room.join(this)
+      this.room.join(this, name)
     })
   }
 

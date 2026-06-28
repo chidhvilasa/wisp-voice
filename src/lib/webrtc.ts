@@ -4,6 +4,7 @@ import { AudioPipeline } from './audio'
 import { VADProcessor } from './vad'
 
 export interface WispVoiceEngineEvents {
+  'peer-discovered': (peerId: string, name: string) => void
   'peer-joined': (peerId: string) => void
   'peer-left': (peerId: string) => void
   'peer-name': (peerId: string, name: string) => void
@@ -173,7 +174,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
       this.pendingConnectResolve = resolve
       this.pendingConnectReject = reject
 
-      const url = `${toWebSocketUrl(this.signalingUrl)}/room/${roomCode}/ws`
+      const url = `${toWebSocketUrl(this.signalingUrl)}/room/${roomCode}/ws?name=${encodeURIComponent(displayName)}`
       const ws = new WebSocket(url)
       this.ws = ws
 
@@ -410,6 +411,14 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     return this.displayName
   }
 
+  getDebugInfo(): { peerId: string; connectionState: string; iceConnectionState: string }[] {
+    return Array.from(this.connections.entries()).map(([peerId, pc]) => ({
+      peerId,
+      connectionState: pc.connectionState,
+      iceConnectionState: pc.iceConnectionState,
+    }))
+  }
+
   setDuckAmount(amount: number): void {
     this.duckAmount = amount
   }
@@ -548,8 +557,15 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     switch (message.type) {
       case 'joined': {
         this.selfId = message['peerId'] as string
-        const existingPeers = (message['existingPeers'] as string[]) ?? []
-        for (const remoteId of existingPeers) {
+        // existingPeers may be string[] (older signaling server deploys) or
+        // { id, name }[] (current); handle both so a client/server version
+        // mismatch degrades gracefully instead of crashing on bad destructuring.
+        const existingPeersRaw = (message['existingPeers'] as unknown[]) ?? []
+        for (const entry of existingPeersRaw) {
+          const remoteId = typeof entry === 'string' ? entry : (entry as { id?: string }).id
+          const name = typeof entry === 'string' ? '' : ((entry as { name?: string }).name ?? '')
+          if (!remoteId) continue
+          this.emit('peer-discovered', remoteId, name || remoteId.slice(0, 8))
           this.initiateOffer(remoteId).catch((error: unknown) => this.emitNegotiationError(error))
         }
         this.pendingConnectResolve?.()
@@ -557,8 +573,12 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
         this.pendingConnectReject = null
         break
       }
-      case 'peer-joined':
+      case 'peer-joined': {
+        const peerId = message['peerId'] as string
+        const name = (message['name'] as string) || peerId.slice(0, 8)
+        this.emit('peer-discovered', peerId, name)
         break
+      }
       case 'peer-left': {
         const peerId = message['peerId'] as string
         this.cleanupPeer(peerId)

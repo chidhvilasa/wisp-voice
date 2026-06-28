@@ -10,6 +10,7 @@ export interface Peer {
   speaking: boolean
   quality: ConnectionQuality
   latencyMs: number
+  connecting?: boolean
 }
 
 export interface ChatMessage {

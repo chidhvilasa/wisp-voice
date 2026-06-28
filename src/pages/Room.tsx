@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   AlertCircle,
   ArrowLeft,
+  Bug,
   Check,
   Copy,
   Headphones,
@@ -91,9 +92,21 @@ export default function Room() {
   const [showSettings, setShowSettings] = useState(false)
   const [showChat, setShowChat] = useState(false)
   const [showShare, setShowShare] = useState(false)
+  const [showDebug, setShowDebug] = useState(false)
   const [copied, setCopied] = useState(false)
   const [emptyStateCopied, setEmptyStateCopied] = useState(false)
   const [volumes, setVolumes] = useState<Record<string, number>>({})
+
+  const [debugInfo, setDebugInfo] = useState<
+    { peerId: string; connectionState: string; iceConnectionState: string }[]
+  >([])
+  useEffect(() => {
+    if (!showDebug) return
+    const update = () => setDebugInfo(getVoiceEngine().getDebugInfo())
+    update()
+    const intervalId = setInterval(update, 1000)
+    return () => clearInterval(intervalId)
+  }, [showDebug])
 
   const handleCopyCode = useCallback(() => {
     void navigator.clipboard
@@ -149,6 +162,7 @@ export default function Room() {
       speaking: peer.speaking,
       signal: signalFromQuality(peer.quality),
       latencyMs: peer.latencyMs,
+      connecting: peer.connecting,
     })),
   ]
 
@@ -274,6 +288,16 @@ export default function Room() {
               )}
               <button
                 type="button"
+                onClick={() => setShowDebug((prev) => !prev)}
+                aria-label="Toggle debug panel"
+                className={`grid h-8 w-8 place-items-center rounded-md hover:bg-surface2 ${
+                  showDebug ? 'text-accent' : 'text-text-tertiary'
+                }`}
+              >
+                <Bug size={14} />
+              </button>
+              <button
+                type="button"
                 onClick={() => setShowSettings(true)}
                 aria-label="Open settings"
                 className="grid h-8 w-8 place-items-center rounded-md text-text-tertiary hover:bg-surface2"
@@ -345,6 +369,26 @@ export default function Room() {
                   <div className="flex items-center gap-2 text-text-secondary">
                     <Loader2 size={14} className="animate-spin" />
                     <span>Finding network path...</span>
+                  </div>
+                </div>
+              )}
+
+              {showDebug && (
+                <div className="mt-6 w-full max-w-sm rounded-card border border-border bg-[#0A0A0C] p-3 font-mono text-[11px] text-text-secondary">
+                  <div>connectionState: {connectionState}</div>
+                  <div>peers.size: {peers.length}</div>
+                  <div>localPeerId: {(getVoiceEngine().getSelfId() ?? '').slice(0, 6) || '(none)'}</div>
+                  <div className="mt-2 border-t border-border pt-2">
+                    {debugInfo.length === 0 ? (
+                      <div>(no peer connections)</div>
+                    ) : (
+                      debugInfo.map((d) => (
+                        <div key={d.peerId}>
+                          {d.peerId.slice(0, 6)}: connectionState={d.connectionState} iceConnectionState=
+                          {d.iceConnectionState}
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               )}

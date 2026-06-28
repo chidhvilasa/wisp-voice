@@ -25,8 +25,11 @@ export function generatePeerId(): string {
   return id
 }
 
+const MAX_NAME_LENGTH = 32
+
 export class WispRoom {
   private peers: Map<string, WebSocket> = new Map()
+  private peerNames: Map<string, string> = new Map()
   private rateLimits: Map<string, number[]> = new Map()
   private state: DurableObjectState
 
@@ -56,15 +59,16 @@ export class WispRoom {
       return new Response('Room not found', { status: 404 })
     }
 
+    const name = (url.searchParams.get('name') ?? '').slice(0, MAX_NAME_LENGTH)
     const pair = new WebSocketPair()
     const client = pair[0]
     const server = pair[1]
-    this.handleSession(server)
+    this.handleSession(server, name)
 
     return new Response(null, { status: 101, webSocket: client })
   }
 
-  handleSession(ws: WebSocket): void {
+  handleSession(ws: WebSocket, name: string = ''): void {
     if (this.peers.size >= MAX_PEERS_PER_ROOM) {
       ws.accept()
       ws.send(JSON.stringify({ type: 'room-full' }))
@@ -75,11 +79,15 @@ export class WispRoom {
     ws.accept()
 
     const peerId = generatePeerId()
-    const existingPeers = Array.from(this.peers.keys())
+    const existingPeers = Array.from(this.peers.keys()).map((id) => ({
+      id,
+      name: this.peerNames.get(id) ?? '',
+    }))
     this.peers.set(peerId, ws)
+    this.peerNames.set(peerId, name)
 
     ws.send(JSON.stringify({ type: 'joined', peerId, existingPeers }))
-    this.broadcast({ type: 'peer-joined', peerId }, peerId)
+    this.broadcast({ type: 'peer-joined', peerId, name }, peerId)
 
     ws.addEventListener('message', (event: MessageEvent) => {
       this.onMessage(peerId, event.data as string)
@@ -114,6 +122,7 @@ export class WispRoom {
 
   onClose(peerId: string): void {
     this.peers.delete(peerId)
+    this.peerNames.delete(peerId)
     this.rateLimits.delete(peerId)
     this.broadcast({ type: 'peer-left', peerId })
 

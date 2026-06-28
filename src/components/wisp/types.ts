@@ -9,6 +9,7 @@ export interface Peer {
   deafened?: boolean;
   signal?: 1 | 2 | 3;
   latencyMs?: number;
+  connecting?: boolean;
 }
 
 export interface ChatMessage {

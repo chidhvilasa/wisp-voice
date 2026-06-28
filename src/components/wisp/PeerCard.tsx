@@ -54,8 +54,14 @@ export function PeerCard({ peer, volume = 100, onVolumeChange, avatarSize = 68, 
       </div>
 
       <div className="flex items-center gap-2 text-text-tertiary">
-        <SignalBars level={peer.signal ?? 3} />
-        {!peer.muted && <Mic size={12} className="text-text-secondary" />}
+        {peer.connecting ? (
+          <span className="text-[11px] text-text-tertiary">Connecting...</span>
+        ) : (
+          <>
+            <SignalBars level={peer.signal ?? 3} />
+            {!peer.muted && <Mic size={12} className="text-text-secondary" />}
+          </>
+        )}
       </div>
 
       {!peer.isSelf && (

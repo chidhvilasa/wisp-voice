@@ -8,6 +8,7 @@ import { UpdateBanner } from '../components/UpdateBanner'
 import { WispLogo } from '../components/wisp/WispLogo'
 import { Avatar } from '../components/wisp/Avatar'
 import { cn } from '../lib/utils'
+import packageJson from '../../package.json'
 import type { RecentRoom } from '../types'
 
 const ROOM_CODE_PATTERN = /^[A-Za-z0-9]{6}$/
@@ -152,7 +153,7 @@ export default function Home() {
         <header className="flex items-center justify-between">
           <WispLogo />
           <span className="rounded-full border border-border bg-surface2 px-2.5 py-1 text-[11px] text-text-tertiary">
-            v0.3.0
+            v{packageJson.version}
           </span>
         </header>
 
