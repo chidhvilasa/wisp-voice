@@ -24,6 +24,7 @@ interface VoiceState {
   connectionState: ConnectionState
   chatMessages: ChatMessage[]
   lastError: string | null
+  turnUnavailable: boolean
   setRoomCode: (roomCode: string) => void
   setDisplayName: (displayName: string) => void
   setPeer: (peer: Peer) => void
@@ -36,6 +37,7 @@ interface VoiceState {
   setConnectionState: (state: ConnectionState) => void
   addChatMessage: (message: ChatMessage) => void
   setLastError: (error: string | null) => void
+  setTurnUnavailable: (turnUnavailable: boolean) => void
   reset: () => void
 }
 
@@ -51,6 +53,7 @@ const initialState = {
   connectionState: 'idle' as ConnectionState,
   chatMessages: [] as ChatMessage[],
   lastError: null as string | null,
+  turnUnavailable: false,
 }
 
 export const useVoiceStore = create<VoiceState>((set) => ({
@@ -99,6 +102,8 @@ export const useVoiceStore = create<VoiceState>((set) => ({
     set((state) => ({ chatMessages: [...state.chatMessages, message] })),
 
   setLastError: (lastError) => set({ lastError }),
+
+  setTurnUnavailable: (turnUnavailable) => set({ turnUnavailable }),
 
   reset: () =>
     set({

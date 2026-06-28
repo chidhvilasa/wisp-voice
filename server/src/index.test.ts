@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import worker, { generateRoomCode, WispRoom, type Env } from './index'
 
 class MockWebSocket {
@@ -162,6 +162,72 @@ describe('Room existence enforcement', () => {
       // which is exactly what this test needs to confirm.
     }
     expect(status).not.toBe(404)
+  })
+})
+
+describe('GET /ice-servers', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('returns an array containing at least STUN entries', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')))
+    const request = new Request('http://localhost/ice-servers', {
+      headers: { 'CF-Connecting-IP': 'test-ip-stun-entries' },
+    })
+    const response = await worker.fetch(request, createMockEnv())
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { urls: string[] | string }[]
+    expect(Array.isArray(body)).toBe(true)
+    const hasStun = body.some((entry) => {
+      const urls = Array.isArray(entry.urls) ? entry.urls : [entry.urls]
+      return urls.some((u) => u.startsWith('stun:'))
+    })
+    expect(hasStun).toBe(true)
+  })
+
+  it('returns 429 after 10 requests in the rate-limit window', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')))
+    const env = createMockEnv()
+    const ip = 'test-ip-rate-limit'
+
+    let lastStatus = 0
+    for (let i = 0; i < 11; i++) {
+      const request = new Request('http://localhost/ice-servers', {
+        headers: { 'CF-Connecting-IP': ip },
+      })
+      const response = await worker.fetch(request, env)
+      lastStatus = response.status
+    }
+
+    expect(lastStatus).toBe(429)
+  })
+
+  it('responds with a Cache-Control: no-store header', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')))
+    const request = new Request('http://localhost/ice-servers', {
+      headers: { 'CF-Connecting-IP': 'test-ip-cache-control' },
+    })
+    const response = await worker.fetch(request, createMockEnv())
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+
+  it('never includes the raw Metered API key in the response body', async () => {
+    const fakeApiKey = 'fake-test-metered-api-key-12345'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => [{ urls: ['turn:example.metered.live'], username: 'u', credential: 'c' }],
+      }),
+    )
+    const env = { ...createMockEnv(), METERED_SECRET_KEY: fakeApiKey }
+    const request = new Request('http://localhost/ice-servers', {
+      headers: { 'CF-Connecting-IP': 'test-ip-no-key-leak' },
+    })
+    const response = await worker.fetch(request, env)
+    const bodyText = await response.text()
+    expect(bodyText).not.toContain(fakeApiKey)
   })
 })
 

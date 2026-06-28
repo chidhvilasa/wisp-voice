@@ -49,6 +49,7 @@ export function useVoice(): UseVoiceResult {
   const setConnectionState = useVoiceStore((state) => state.setConnectionState)
   const addChatMessage = useVoiceStore((state) => state.addChatMessage)
   const setLastError = useVoiceStore((state) => state.setLastError)
+  const setTurnUnavailable = useVoiceStore((state) => state.setTurnUnavailable)
   const resetVoiceStore = useVoiceStore((state) => state.reset)
 
   const schedulerRef = useRef<ReturnType<typeof createReconnectScheduler> | null>(null)
@@ -69,6 +70,7 @@ export function useVoice(): UseVoiceResult {
       setRoomCode(roomCode)
       setDisplayName(displayName)
       setLastError(null)
+      setTurnUnavailable(false)
       schedulerRef.current?.reset()
 
       try {
@@ -77,7 +79,7 @@ export function useVoice(): UseVoiceResult {
         schedulerRef.current?.scheduleReconnect()
       }
     },
-    [setRoomCode, setDisplayName, setLastError],
+    [setRoomCode, setDisplayName, setLastError, setTurnUnavailable],
   )
 
   const disconnect = useCallback(() => {
@@ -210,6 +212,11 @@ export function useVoice(): UseVoiceResult {
       schedulerRef.current?.scheduleReconnect()
     }
 
+    const handleTurnUnavailable = () => {
+      debug('turn-unavailable')
+      setTurnUnavailable(true)
+    }
+
     engine.on('peer-discovered', handlePeerDiscovered)
     engine.on('peer-joined', handlePeerJoined)
     engine.on('peer-left', handlePeerLeft)
@@ -219,6 +226,7 @@ export function useVoice(): UseVoiceResult {
     engine.on('chat-message', handleChatMessage)
     engine.on('peer-stats', handlePeerStats)
     engine.on('error', handleError)
+    engine.on('turn-unavailable', handleTurnUnavailable)
 
     return () => {
       engine.off('peer-discovered', handlePeerDiscovered)
@@ -230,9 +238,10 @@ export function useVoice(): UseVoiceResult {
       engine.off('chat-message', handleChatMessage)
       engine.off('peer-stats', handlePeerStats)
       engine.off('error', handleError)
+      engine.off('turn-unavailable', handleTurnUnavailable)
       schedulerRef.current?.cancel()
     }
-  }, [setPeer, removePeer, setConnectionState, addChatMessage, setLastError])
+  }, [setPeer, removePeer, setConnectionState, addChatMessage, setLastError, setTurnUnavailable])
 
   useEffect(() => {
     const unsubscribe = useSettingsStore.subscribe((state, prevState) => {

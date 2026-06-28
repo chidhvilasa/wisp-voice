@@ -1,5 +1,8 @@
 export interface Env {
   WISP_ROOM: DurableObjectNamespace
+  METERED_SECRET_KEY?: string
+  EXPRESSTURN_USERNAME?: string
+  EXPRESSTURN_PASSWORD?: string
 }
 
 const ROOM_CODE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
@@ -166,33 +169,76 @@ const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Headers': 'Content-Type',
 }
 
-// Served from the worker (rather than hardcoded in the client bundle) so TURN
-// credentials can be rotated without shipping a new app release.
-const ICE_SERVERS = [
+// Public STUN-only; safe to fall back to if the Metered fetch fails. TURN
+// credentials are never hardcoded here - they live only in Worker secrets
+// and are fetched/attached server-side in buildIceServers().
+const STUN_ONLY_SERVERS = [
   { urls: ['stun:stun.l.google.com:19302'] },
   { urls: ['stun:stun1.l.google.com:19302'] },
   { urls: ['stun:stun.cloudflare.com:3478'] },
-  {
-    urls: [
-      'turn:openrelay.metered.ca:80',
-      'turn:openrelay.metered.ca:443',
-      'turn:openrelay.metered.ca:443?transport=tcp',
-      'turns:openrelay.metered.ca:443',
-    ],
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
-  },
-  {
-    urls: [
-      'turn:a.relay.metered.ca:80',
-      'turn:a.relay.metered.ca:80?transport=tcp',
-      'turn:a.relay.metered.ca:443',
-      'turn:a.relay.metered.ca:443?transport=tcp',
-    ],
-    username: 'e8dd65f42a7f0b8f9f0eb9e0',
-    credential: 'uR6LBDRkn3JKXL9/',
-  },
 ]
+
+const ICE_SERVERS_RATE_LIMIT_WINDOW_MS = 60000
+const ICE_SERVERS_RATE_LIMIT_MAX = 10
+const iceServersRateLimits: Map<string, number[]> = new Map()
+
+function isIceServersRateLimited(ip: string): boolean {
+  const now = Date.now()
+  const timestamps = (iceServersRateLimits.get(ip) ?? []).filter(
+    (t) => now - t < ICE_SERVERS_RATE_LIMIT_WINDOW_MS,
+  )
+  if (timestamps.length >= ICE_SERVERS_RATE_LIMIT_MAX) {
+    iceServersRateLimits.set(ip, timestamps)
+    return true
+  }
+  timestamps.push(now)
+  iceServersRateLimits.set(ip, timestamps)
+  return false
+}
+
+async function fetchMeteredServers(env: Env): Promise<unknown[]> {
+  if (!env.METERED_SECRET_KEY) return []
+  try {
+    const res = await fetch(
+      `https://wisp-voice.metered.live/api/v1/turn/credentials?apiKey=${env.METERED_SECRET_KEY}`,
+      { signal: AbortSignal.timeout(3000) },
+    )
+    if (!res.ok) return []
+    const servers = await res.json()
+    return Array.isArray(servers) ? servers : []
+  } catch {
+    return []
+  }
+}
+
+async function buildIceServers(env: Env): Promise<unknown[]> {
+  const meteredServers = await fetchMeteredServers(env)
+
+  const servers: unknown[] = [...STUN_ONLY_SERVERS, ...meteredServers]
+
+  if (env.EXPRESSTURN_USERNAME && env.EXPRESSTURN_PASSWORD) {
+    servers.push({
+      urls: ['turn:free.expressturn.com:3478', 'turn:free.expressturn.com:3478?transport=tcp'],
+      username: env.EXPRESSTURN_USERNAME,
+      credential: env.EXPRESSTURN_PASSWORD,
+    })
+  }
+
+  if (meteredServers.length === 0) {
+    servers.push({
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp',
+        'turns:openrelay.metered.ca:443',
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    })
+  }
+
+  return servers
+}
 
 async function handleRequest(request: Request, env: Env): Promise<Response> {
   if (request.method === 'OPTIONS') {
@@ -202,8 +248,17 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url)
 
   if (request.method === 'GET' && url.pathname === '/ice-servers') {
-    return new Response(JSON.stringify(ICE_SERVERS), {
-      headers: { 'content-type': 'application/json', ...CORS_HEADERS },
+    const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
+    if (isIceServersRateLimited(ip)) {
+      return new Response(JSON.stringify({ error: 'Too many requests' }), {
+        status: 429,
+        headers: { 'content-type': 'application/json', ...CORS_HEADERS },
+      })
+    }
+
+    const servers = await buildIceServers(env)
+    return new Response(JSON.stringify(servers), {
+      headers: { 'content-type': 'application/json', 'Cache-Control': 'no-store', ...CORS_HEADERS },
     })
   }
 

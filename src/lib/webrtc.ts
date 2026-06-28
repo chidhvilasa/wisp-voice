@@ -13,55 +13,23 @@ export interface WispVoiceEngineEvents {
   'chat-message': (message: ChatMessage) => void
   'peer-stats': (stats: Map<string, PeerStats>) => void
   'security-warning': (peerIds: string[]) => void
+  'turn-unavailable': () => void
   error: (error: Error) => void
 }
 
-const ICE_SERVERS: RTCIceServer[] = [
+// STUN-only - safe to ship in the client bundle since there are no
+// credentials to steal. TURN servers (which require credentials) are fetched
+// from the signaling worker's /ice-servers endpoint at connect time; that
+// endpoint holds the real TURN secrets server-side and is the only place
+// they ever exist. If the fetch fails, P2P still works when a direct or
+// STUN-reflexive path exists, but no TURN relay is available.
+const STUN_ONLY_FALLBACK: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
   { urls: 'stun:stun2.l.google.com:19302' },
-  { urls: 'stun:stun3.l.google.com:19302' },
-  { urls: 'stun:stun4.l.google.com:19302' },
   { urls: 'stun:stun.cloudflare.com:3478' },
-  { urls: 'stun:stun.relay.metered.ca:80' },
-  { urls: 'stun:stun.nextcloud.com:443' },
-  { urls: 'stun:stun.sipgate.net:3478' },
-  {
-    urls: [
-      'turn:openrelay.metered.ca:80',
-      'turn:openrelay.metered.ca:443',
-      'turn:openrelay.metered.ca:443?transport=tcp',
-      'turns:openrelay.metered.ca:443',
-    ],
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
-  },
-  {
-    urls: [
-      'turn:a.relay.metered.ca:80',
-      'turn:a.relay.metered.ca:80?transport=tcp',
-      'turn:a.relay.metered.ca:443',
-      'turn:a.relay.metered.ca:443?transport=tcp',
-    ],
-    username: 'e8dd65f42a7f0b8f9f0eb9e0',
-    credential: 'uR6LBDRkn3JKXL9/',
-  },
-  {
-    urls: 'turn:numb.viagenie.ca',
-    username: 'webrtc@live.com',
-    credential: 'muazkh',
-  },
-  {
-    urls: 'turn:turn.bistri.com:80',
-    username: 'homeo',
-    credential: 'homeo',
-  },
 ]
-// TODO: replace these static/shared TURN credentials with the
-// /turn-credentials endpoint on the signaling worker once a Metered.ca
-// API key is provisioned (see server/src/index.ts). Per-session credentials
-// with a short TTL are more abuse-resistant than hardcoded ones.
-const ICE_SERVERS_FETCH_TIMEOUT_MS = 3000
+const ICE_SERVERS_FETCH_TIMEOUT_MS = 5000
 
 const MAX_REMOTE_PEERS = 3
 const STATS_INTERVAL_MS = 2000
@@ -122,7 +90,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
   private iceRestartTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map()
   private iceRestartAttempts: Map<string, number> = new Map()
   private offererPeers: Set<string> = new Set()
-  private iceServers: RTCIceServer[] = ICE_SERVERS
+  private iceServers: RTCIceServer[] = STUN_ONLY_FALLBACK
   private iceCandidateStats: Map<string, { count: number; hasRelay: boolean }> = new Map()
   private gainNodes: Map<string, GainNode> = new Map()
   private peerVolumes: Map<string, number> = new Map()
@@ -573,16 +541,22 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
       const res = await fetch(`${SIGNALING_URL}/ice-servers`, {
         signal: AbortSignal.timeout(ICE_SERVERS_FETCH_TIMEOUT_MS),
       })
-      if (!res.ok) return
+      if (!res.ok) {
+        this.emit('turn-unavailable')
+        return
+      }
       const servers = (await res.json()) as RTCIceServer[]
       if (Array.isArray(servers) && servers.length > 0) {
         this.iceServers = servers
+      } else {
+        this.emit('turn-unavailable')
       }
     } catch {
       if (import.meta.env.DEV) {
-        console.warn('[Wisp] Failed to fetch ICE servers, using fallback')
+        console.warn('[Wisp] ICE server fetch failed, TURN unavailable')
       }
-      // this.iceServers already defaults to the static ICE_SERVERS fallback
+      this.emit('turn-unavailable')
+      // this.iceServers already defaults to the STUN_ONLY_FALLBACK
     }
   }
 

@@ -15,6 +15,7 @@ import {
   Loader2,
   Settings as SettingsIcon,
   Unlock,
+  X,
 } from 'lucide-react'
 import { useVoice } from '../hooks/useVoice'
 import { useVAD } from '../hooks/useVAD'
@@ -82,6 +83,8 @@ export default function Room() {
   const isHost = useVoiceStore((state) => state.isHost)
   const chatMessages = useVoiceStore((state) => state.chatMessages)
   const lastError = useVoiceStore((state) => state.lastError)
+  const turnUnavailable = useVoiceStore((state) => state.turnUnavailable)
+  const [turnBannerDismissed, setTurnBannerDismissed] = useState(false)
 
   const [localStream, setLocalStream] = useState<MediaStream | null>(null)
   useEffect(() => {
@@ -206,6 +209,20 @@ export default function Room() {
                 className="flex-shrink-0 rounded bg-muted-red/30 px-2 py-1 text-xs font-medium text-text-primary hover:bg-muted-red/40"
               >
                 Retry
+              </button>
+            </div>
+          )}
+          {turnUnavailable && !turnBannerDismissed && (
+            <div className="flex items-center justify-center gap-3 bg-warning/20 px-4 py-2 text-sm text-warning">
+              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              <span>Relay server unavailable. Connection may fail on some networks.</span>
+              <button
+                type="button"
+                onClick={() => setTurnBannerDismissed(true)}
+                aria-label="Dismiss"
+                className="flex-shrink-0 rounded p-0.5 hover:bg-warning/30"
+              >
+                <X className="h-4 w-4" />
               </button>
             </div>
           )}
