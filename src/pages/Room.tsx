@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AlertCircle,
   ArrowLeft,
@@ -22,6 +22,7 @@ import { useVAD } from '../hooks/useVAD'
 import { useVoiceStore } from '../store/voiceStore'
 import { getVoiceEngine, lockRoom } from '../lib/rooms'
 import type { WispVoiceEngine } from '../lib/webrtc'
+import { cn } from '../lib/utils'
 import MicMeter from '../components/MicMeter'
 import Settings from './Settings'
 import { PeerCard } from '../components/wisp/PeerCard'
@@ -108,6 +109,21 @@ export default function Room() {
   const [showSettings, setShowSettings] = useState(false)
   const [showChat, setShowChat] = useState(false)
   const [showShare, setShowShare] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+  const lastSeenMessageCountRef = useRef(0)
+  useEffect(() => {
+    if (showChat) {
+      lastSeenMessageCountRef.current = chatMessages.length
+      setUnreadCount(0)
+      return
+    }
+    const newMessages = chatMessages.slice(lastSeenMessageCountRef.current)
+    const newRemoteCount = newMessages.filter((message) => message.from !== displayName).length
+    if (newRemoteCount > 0) {
+      setUnreadCount((prev) => prev + newRemoteCount)
+    }
+    lastSeenMessageCountRef.current = chatMessages.length
+  }, [chatMessages, showChat, displayName])
   const [showDebug, setShowDebug] = useState(false)
   const [copied, setCopied] = useState(false)
   const [emptyStateCopied, setEmptyStateCopied] = useState(false)
@@ -499,9 +515,28 @@ export default function Room() {
               >
                 {localDeafened ? <HeadphoneOff size={18} /> : <Headphones size={18} />}
               </ToolbarButton>
-              <ToolbarButton tooltip="Chat" active={showChat} onClick={() => setShowChat((prev) => !prev)}>
-                <MessageCircle size={18} />
-              </ToolbarButton>
+              <div className="relative inline-flex">
+                <ToolbarButton
+                  tooltip="Chat"
+                  active={showChat}
+                  onClick={() => {
+                    setShowChat((prev) => !prev)
+                    setUnreadCount(0)
+                  }}
+                >
+                  <MessageCircle size={18} />
+                </ToolbarButton>
+                {unreadCount > 0 && (
+                  <span
+                    className={cn(
+                      'absolute -top-1 -right-1 grid h-4 place-items-center rounded-full bg-muted-red px-1 text-[10px] font-bold leading-none text-white',
+                      unreadCount > 9 ? 'min-w-[18px]' : 'min-w-[16px]',
+                    )}
+                  >
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </div>
               <ToolbarButton tooltip="Settings" onClick={() => setShowSettings(true)}>
                 <SettingsIcon size={18} />
               </ToolbarButton>

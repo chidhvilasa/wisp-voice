@@ -57,8 +57,11 @@ function generateId(): string {
 }
 
 function classifyQuality(rttMs: number): ConnectionQuality {
-  if (rttMs < 80) return 'good'
-  if (rttMs <= 200) return 'ok'
+  // A relayed (TURN) connection adds ~100-200ms over a direct P2P path; that's
+  // still perfectly fine for voice, so thresholds are relaxed accordingly
+  // rather than assuming every connection is direct.
+  if (rttMs < 200) return 'good'
+  if (rttMs < 400) return 'ok'
   return 'poor'
 }
 
@@ -69,6 +72,15 @@ function sanitizeChatText(text: string): string {
 
 function toWebSocketUrl(signalingUrl: string): string {
   return signalingUrl.replace('https://', 'wss://').replace('http://', 'ws://')
+}
+
+// HTMLMediaElement.play() can throw synchronously, reject, or (in some test
+// environments like jsdom) return undefined instead of a Promise. Deferring
+// the call into a promise chain normalizes all three into a single .catch().
+function safePlay(el: HTMLAudioElement, onError?: (error: unknown) => void): void {
+  void Promise.resolve()
+    .then(() => el.play())
+    .catch((error: unknown) => onError?.(error))
 }
 
 export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
@@ -94,6 +106,8 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
   private iceServers: RTCIceServer[] = STUN_ONLY_FALLBACK
   private iceCandidateStats: Map<string, { count: number; hasRelay: boolean }> = new Map()
   private gainNodes: Map<string, GainNode> = new Map()
+  private remoteAudioElements: Map<string, HTMLAudioElement> = new Map()
+  private resumeOnInteractionHandler: (() => void) | null = null
   private peerVolumes: Map<string, number> = new Map()
   private statsIntervalId: ReturnType<typeof setInterval> | null = null
   private muted = false
@@ -168,6 +182,27 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
       track.enabled = !this.muted
     }
 
+    // WebView autoplay policies can leave the AudioContext suspended until a
+    // real user gesture occurs. Resume on the first click/keypress so remote
+    // audio (and any audio elements awaiting playback) starts reliably.
+    const resumeOnInteraction = () => {
+      if (this.audioContext?.state === 'suspended') {
+        this.audioContext
+          .resume()
+          .then(() => {
+            for (const audioEl of this.remoteAudioElements.values()) {
+              safePlay(audioEl)
+            }
+          })
+          .catch(() => {})
+      }
+    }
+    if (typeof document !== 'undefined') {
+      this.resumeOnInteractionHandler = resumeOnInteraction
+      document.addEventListener('click', resumeOnInteraction, { once: true })
+      document.addEventListener('keydown', resumeOnInteraction, { once: true })
+    }
+
     try {
       this.outgoingStream = await this.audioPipeline.init(this.localStream)
     } catch (error) {
@@ -215,6 +250,18 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
 
   disconnect(): void {
     this.stopStatsLoop()
+
+    if (this.resumeOnInteractionHandler) {
+      document.removeEventListener('click', this.resumeOnInteractionHandler)
+      document.removeEventListener('keydown', this.resumeOnInteractionHandler)
+      this.resumeOnInteractionHandler = null
+    }
+
+    for (const audioEl of this.remoteAudioElements.values()) {
+      audioEl.srcObject = null
+      audioEl.remove()
+    }
+    this.remoteAudioElements.clear()
 
     for (const channel of this.dataChannels.values()) {
       channel.close()
@@ -301,6 +348,12 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
       const volume = this.peerVolumes.get(peerId) ?? 1.0
       gainNode.gain.value = deafened ? 0 : volume
     }
+
+    for (const [peerId, audioEl] of this.remoteAudioElements) {
+      if (audioEl.muted) continue
+      const volume = this.peerVolumes.get(peerId) ?? 1.0
+      audioEl.volume = deafened ? 0 : Math.min(1, volume)
+    }
   }
 
   setPeerVolume(peerId: string, volume: number): void {
@@ -310,6 +363,11 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     const gainNode = this.gainNodes.get(peerId)
     if (gainNode && !this.deafened) {
       gainNode.gain.value = clamped
+    }
+
+    const audioEl = this.remoteAudioElements.get(peerId)
+    if (audioEl && !audioEl.muted) {
+      audioEl.volume = Math.min(1, clamped)
     }
   }
 
@@ -922,21 +980,60 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
 
   private attachRemoteStream(remoteId: string, stream: MediaStream): void {
     if (!stream) return
+
+    // A plain HTML <audio> element is guaranteed to play through system
+    // speakers in every WebView; routing solely through AudioContext.destination
+    // has proven unreliable in some Tauri WebView2 builds on Windows. It's
+    // normally muted (Web Audio below drives actual output so per-peer
+    // volume/deafen control still works) and only unmuted as a direct
+    // fallback if the Web Audio graph fails to connect.
+    let audioEl: HTMLAudioElement | null = null
+    if (typeof document !== 'undefined') {
+      const existingEl = this.remoteAudioElements.get(remoteId)
+      if (existingEl) {
+        existingEl.srcObject = null
+        existingEl.remove()
+      }
+
+      audioEl = document.createElement('audio')
+      audioEl.autoplay = true
+      audioEl.srcObject = stream
+      audioEl.style.display = 'none'
+      document.body.appendChild(audioEl)
+      this.remoteAudioElements.set(remoteId, audioEl)
+
+      const el = audioEl
+      safePlay(el, (err) => {
+        if (import.meta.env.DEV) {
+          console.warn('[Wisp] audio element play failed:', err)
+        }
+        document.addEventListener('click', () => safePlay(el), { once: true })
+      })
+    }
+
     if (!this.audioContext) {
       this.audioContext = new AudioContext()
     }
     if (this.audioContext.state === 'suspended') {
-      void this.audioContext.resume?.()
+      void this.audioContext.resume().catch(() => {})
     }
 
-    const source = this.audioContext.createMediaStreamSource(stream)
-    const gainNode = this.audioContext.createGain()
-    const volume = this.peerVolumes.get(remoteId) ?? 1.0
-    gainNode.gain.value = this.deafened ? 0 : volume
+    try {
+      const source = this.audioContext.createMediaStreamSource(stream)
+      const gainNode = this.audioContext.createGain()
+      const volume = this.peerVolumes.get(remoteId) ?? 1.0
+      gainNode.gain.value = this.deafened ? 0 : volume
 
-    source.connect(gainNode)
-    gainNode.connect(this.audioContext.destination)
-    this.gainNodes.set(remoteId, gainNode)
+      source.connect(gainNode)
+      gainNode.connect(this.audioContext.destination)
+      this.gainNodes.set(remoteId, gainNode)
+      if (audioEl) audioEl.muted = true
+    } catch (error) {
+      if (audioEl) audioEl.muted = false
+      if (import.meta.env.DEV) {
+        console.warn('[Wisp] Web Audio connection failed, using audio element directly', error)
+      }
+    }
 
     const vad = new VADProcessor()
     vad.on('speaking', (isSpeaking) => this.handlePeerSpeaking(remoteId, isSpeaking))
@@ -1048,6 +1145,13 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     }
     this.gainNodes.delete(peerId)
     this.peerVolumes.delete(peerId)
+
+    const audioEl = this.remoteAudioElements.get(peerId)
+    if (audioEl) {
+      audioEl.srcObject = null
+      audioEl.remove()
+      this.remoteAudioElements.delete(peerId)
+    }
 
     const vad = this.vadProcessors.get(peerId)
     if (vad) {
