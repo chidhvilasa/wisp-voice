@@ -12,9 +12,9 @@ Wisp is a lightweight desktop voice chat app built for gaming. Real installable 
 
 | Platform | Download |
 |---|---|
-| Windows | [Wisp_0.4.0_x64-setup.exe](https://github.com/chidhvilasa/wisp-voice/releases/download/v0.4.0/Wisp_0.4.0_x64-setup.exe) |
-| macOS (Intel + Apple Silicon) | [Wisp_0.4.0_universal.dmg](https://github.com/chidhvilasa/wisp-voice/releases/download/v0.4.0/Wisp_0.4.0_universal.dmg) |
-| Linux | [Wisp_0.4.0_amd64.AppImage](https://github.com/chidhvilasa/wisp-voice/releases/download/v0.4.0/Wisp_0.4.0_amd64.AppImage) |
+| Windows | [Wisp_0.4.1_x64-setup.exe](https://github.com/chidhvilasa/wisp-voice/releases/download/v0.4.1/Wisp_0.4.1_x64-setup.exe) |
+| macOS (Intel + Apple Silicon) | [Wisp_0.4.1_universal.dmg](https://github.com/chidhvilasa/wisp-voice/releases/download/v0.4.1/Wisp_0.4.1_universal.dmg) |
+| Linux | [Wisp_0.4.1_amd64.AppImage](https://github.com/chidhvilasa/wisp-voice/releases/download/v0.4.1/Wisp_0.4.1_amd64.AppImage) |
 
 [All releases →](https://github.com/chidhvilasa/wisp-voice/releases)
 
@@ -60,7 +60,7 @@ Discord uses ~400MB RAM and 3-8% CPU while idle. Wisp uses ~42MB RAM and under 1
 
 ### Windows
 
-Download and run `Wisp_0.4.0_x64-setup.exe`.
+Download and run `Wisp_0.4.1_x64-setup.exe`.
 
 Windows SmartScreen may show a warning because Wisp is not yet code-signed. Click **More info** then **Run anyway**. Wisp is fully open source — you can review every line of code in this repo.
 
@@ -68,7 +68,7 @@ Windows SmartScreen may show a warning because Wisp is not yet code-signed. Clic
 
 **One-command install:**
 ```bash
-curl -L https://github.com/chidhvilasa/wisp-voice/releases/download/v0.4.0/Wisp_0.4.0_universal.dmg -o /tmp/Wisp.dmg && hdiutil attach /tmp/Wisp.dmg && sudo cp -r "/Volumes/Wisp/Wisp.app" /Applications/ && sudo xattr -cr /Applications/Wisp.app && hdiutil detach "/Volumes/Wisp" && open /Applications/Wisp.app
+curl -L https://github.com/chidhvilasa/wisp-voice/releases/download/v0.4.1/Wisp_0.4.1_universal.dmg -o /tmp/Wisp.dmg && hdiutil attach /tmp/Wisp.dmg && sudo cp -r "/Volumes/Wisp/Wisp.app" /Applications/ && sudo xattr -cr /Applications/Wisp.app && hdiutil detach "/Volumes/Wisp" && open /Applications/Wisp.app
 ```
 
 macOS will block the app on first launch because it is not signed with an Apple Developer certificate. To open it:
@@ -83,10 +83,10 @@ Grant microphone permission when prompted: **System Settings → Privacy & Secur
 
 ### Linux
 
-Download `Wisp_0.4.0_amd64.AppImage`, make it executable, and run it:
+Download `Wisp_0.4.1_amd64.AppImage`, make it executable, and run it:
 ```bash
-chmod +x Wisp_0.4.0_amd64.AppImage
-./Wisp_0.4.0_amd64.AppImage
+chmod +x Wisp_0.4.1_amd64.AppImage
+./Wisp_0.4.1_amd64.AppImage
 ```
 
 ---
