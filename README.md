@@ -2,120 +2,184 @@
 
 **Voice that doesn't slow you down.**
 
-Wisp is a lightweight, desktop-only voice chat app built for gamers. It is a real, installable binary for Windows, Mac, and Linux — not a browser app, not Electron. No game process injection, no graphics-pipeline hooks, no kernel drivers. Just a fast peer-to-peer voice client with a minimal always-on-top overlay.
+Wisp is a lightweight desktop voice chat app built for gaming. Real installable binary for Windows, Mac, and Linux. Not a browser app. Not Electron. No game process injection, no graphics hooks, no kernel drivers. Just fast peer-to-peer voice with a minimal always-on-top overlay.
 
-[![CI](https://github.com/chidhvilasa/wisp-voice/actions/workflows/ci.yml/badge.svg)](https://github.com/chidhvilasa/wisp-voice/actions/workflows/ci.yml)
+![CI](https://github.com/chidhvilasa/wisp-voice/actions/workflows/ci.yml/badge.svg)
 
-## Download Wisp
+---
+
+## Download
 
 | Platform | Download |
 |---|---|
-| Windows | [Windows installer (.exe)](https://github.com/chidhvilasa/wisp-voice/releases/latest) |
-| macOS (Intel + Apple Silicon) | [macOS disk image (.dmg)](https://github.com/chidhvilasa/wisp-voice/releases/latest) |
-| Linux | [Linux AppImage](https://github.com/chidhvilasa/wisp-voice/releases/latest) |
+| Windows | [Wisp_0.4.0_x64-setup.exe](https://github.com/chidhvilasa/wisp-voice/releases/download/v0.4.0/Wisp_0.4.0_x64-setup.exe) |
+| macOS (Intel + Apple Silicon) | [Wisp_0.4.0_universal.dmg](https://github.com/chidhvilasa/wisp-voice/releases/download/v0.4.0/Wisp_0.4.0_universal.dmg) |
+| Linux | [Wisp_0.4.0_amd64.AppImage](https://github.com/chidhvilasa/wisp-voice/releases/download/v0.4.0/Wisp_0.4.0_amd64.AppImage) |
 
-> Built with Tauri v2. macOS and Linux builds are cross-compiled via GitHub Actions.
+[All releases →](https://github.com/chidhvilasa/wisp-voice/releases)
 
-## Windows Installation
+---
 
-Windows may show a SmartScreen warning "Windows protected your PC". This happens because Wisp is not yet code-signed (signing requires a paid certificate).
+## Why Wisp
 
-To install:
+Discord uses ~400MB RAM and 3-8% CPU while idle. Wisp uses ~42MB RAM and under 1% CPU. Built specifically because Discord's Electron overhead causes frame drops during games on lower-end machines.
 
-1. Click "More info" on the SmartScreen dialog
-2. Click "Run anyway"
-3. Wisp will install normally
+| | Wisp | Discord |
+|---|---|---|
+| RAM idle | ~42 MB | ~400 MB |
+| CPU idle | < 1% | 3–8% |
+| Install size | ~10 MB | ~300 MB |
+| Overlay | OS-level, EAC-safe | DirectX hook |
+| Max room size | 4 people | unlimited |
+| Accounts required | none | required |
 
-This is safe - Wisp is open source and you can review all code at this repo.
+---
 
-### macOS: "Apple cannot verify this app"
+## Features
 
-Wisp's macOS build isn't signed with an Apple Developer certificate yet, so Gatekeeper blocks it on first launch. Use any of these to open it:
+- **Peer-to-peer voice** — E2E encrypted via DTLS-SRTP, built into WebRTC
+- **In-game overlay** — transparent always-on-top window, EAC-safe, auto-hides when silent
+- **Compact and full overlay modes** — draggable, snaps to any screen corner
+- **Up to 4 people** — room codes, no accounts, no servers storing your data
+- **Mute and deafen sync** — both states broadcast to all peers in real time
+- **Per-peer volume** — adjust each person individually 0–200%
+- **Push to talk** — Caps Lock by default, fully rebindable
+- **Noise suppression** — browser-native AEC, AGC, and noise gating
+- **Audio ducking** — game audio lowers when someone speaks
+- **Discord-style sounds** — join, leave, mute, unmute, message notifications
+- **Text chat** — via WebRTC DataChannel, no server needed
+- **Soundboard** — 5 bindable audio slots
+- **Global hotkeys** — work while any game is focused
+- **System tray** — mute and deafen without leaving your game
+- **Auto-updater** — updates install in the background
+- **Works on Jio CGNAT** — ExpressTURN relay ensures connection even on carrier-grade NAT
 
-1. Right-click (or Control-click) `Wisp.app` in Finder → **Open** → **Open** again on the confirmation dialog.
-2. Or remove the quarantine flag in Terminal: `xattr -cr /Applications/Wisp.app`
-3. Or go to **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to the Wisp warning.
+---
 
-## Architecture
+## Install
+
+### Windows
+
+Download and run `Wisp_0.4.0_x64-setup.exe`.
+
+Windows SmartScreen may show a warning because Wisp is not yet code-signed. Click **More info** then **Run anyway**. Wisp is fully open source — you can review every line of code in this repo.
+
+### macOS
+
+**One-command install:**
+```bash
+curl -L https://github.com/chidhvilasa/wisp-voice/releases/download/v0.4.0/Wisp_0.4.0_universal.dmg -o /tmp/Wisp.dmg && hdiutil attach /tmp/Wisp.dmg && sudo cp -r "/Volumes/Wisp/Wisp.app" /Applications/ && sudo xattr -cr /Applications/Wisp.app && hdiutil detach "/Volumes/Wisp" && open /Applications/Wisp.app
+```
+
+macOS will block the app on first launch because it is not signed with an Apple Developer certificate. To open it:
+
+1. Right-click `Wisp.app` in Finder → **Open** → **Open**
+2. Or run: `sudo xattr -cr /Applications/Wisp.app`
+3. Or go to **System Settings → Privacy & Security** → scroll down → **Open Anyway**
+
+After opening once, macOS remembers and will not block it again.
+
+Grant microphone permission when prompted: **System Settings → Privacy & Security → Microphone → enable Wisp**.
+
+### Linux
+
+Download `Wisp_0.4.0_amd64.AppImage`, make it executable, and run it:
+```bash
+chmod +x Wisp_0.4.0_amd64.AppImage
+./Wisp_0.4.0_amd64.AppImage
+```
+
+---
+
+## How it works
 
 ```
-   Client A  <==== WebRTC P2P (DTLS-SRTP voice + data) ====>  Client B
-       \                                                        /
-        \--- WebSocket (signaling only) ---\  /--- WebSocket ---/
-                                             v  v
-                                  Cloudflare Workers
-                                  (Durable Object, ephemeral relay)
+[Wisp App] ──WebSocket──► [Cloudflare Workers]  (signaling only, ephemeral)
+     │                           │
+     └──────WebRTC P2P───────────┘  (direct after handshake)
+            DTLS-SRTP encrypted
+            TURN relay via ExpressTURN if P2P fails (Jio CGNAT etc.)
 ```
 
-- **Voice and chat data** flow directly peer-to-peer over WebRTC once connected; the relay never sees decrypted audio.
-- **Signaling** (SDP/ICE exchange, room membership) goes through a Cloudflare Worker over WebSocket — it brokers the handshake and stores no persistent data.
-- **TURN fallback** is used only when a direct P2P path can't be established. TURN credentials (ExpressTURN, OpenRelay) are fetched from the signaling worker's `/ice-servers` endpoint at connect time and are never hardcoded in the client — the worker holds them as encrypted secrets.
+1. One person clicks **Create Room** — a 6-character code is generated
+2. Friends enter the code in **Join Room**
+3. The Cloudflare signaling server introduces the peers
+4. WebRTC establishes direct P2P audio — signaling server is no longer involved
+5. If P2P fails (CGNAT, strict firewall), ExpressTURN relay is used automatically
 
-## Tech Stack
+---
 
-| Layer | Choice |
+## Tech stack
+
+| Layer | Technology |
 |---|---|
-| Desktop runtime | Tauri v2 (Rust backend, React frontend) |
-| Frontend | React 18 + TypeScript + Tailwind CSS + shadcn/ui + Vite |
+| Desktop runtime | Tauri v2 (Rust + WebView) |
+| Frontend | React 18 + TypeScript + Tailwind CSS |
+| Voice transport | WebRTC (Opus codec, DTLS-SRTP) |
+| Signaling | Cloudflare Workers + Durable Objects |
+| TURN relay | ExpressTURN (primary) + OpenRelay (fallback) |
+| Noise suppression | Web Audio API AEC + AGC |
 | State | Zustand |
-| WebRTC | Native RTCPeerConnection + simple-peer |
-| Audio | Web Audio API + RNNoise (AudioWorklet) |
-| Signaling | Cloudflare Workers + Durable Objects (WebSocket) |
-| STUN/TURN | Google/Cloudflare STUN (free) + ExpressTURN + OpenRelay (server-delivered) |
-| Hotkeys | tauri-plugin-global-shortcut |
-| Logging | tauri-plugin-log |
-| Testing | Vitest |
+| Testing | Vitest (59 tests) |
+| CI/CD | GitHub Actions (Windows + macOS + Linux) |
 
-## Performance
+---
 
-| | Target | Measured | Discord |
-|---|---|---|---|
-| RAM (idle) | < 50 MB | TBD — pending first real Tauri build | ~400 MB |
-| CPU (idle) | < 1% | TBD — pending first real Tauri build | 3-8% |
+## Build from source
 
-Targets are design goals based on Tauri's native-webview architecture (no bundled Chromium). Measured values will be filled in after the first Rust-compiled release build is profiled on real hardware.
-
-## Project Structure
-
-```
-src/            React frontend (components, pages, overlay, hooks, store, lib, types, worklets)
-src-tauri/      Rust backend (Tauri commands, window/tray/hotkey management)
-server/         Cloudflare Workers signaling server
-.github/        CI/CD workflows
-```
-
-## Build Instructions
-
-Prerequisites: Node.js 20+, Rust stable, and the [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your OS.
+Prerequisites: [Rust](https://rustup.rs), Node.js 20+
 
 ```bash
+git clone https://github.com/chidhvilasa/wisp-voice
+cd wisp-voice
 npm install
-npm run tauri dev    # run in development
-npm run tauri build  # produce a release binary
+cp .env.example .env
+# Edit .env and set VITE_SIGNALING_URL
+npm run tauri dev
 ```
 
-## Signaling Server
+To build a release binary:
+```bash
+npm run tauri build
+```
 
-The signaling server lives in `server/` and deploys to Cloudflare Workers free tier:
+### Deploy the signaling server
 
 ```bash
 cd server
 npm install
-npx wrangler login
-npx wrangler deploy
+wrangler login
+wrangler deploy
 ```
 
-Set `VITE_SIGNALING_URL` in `.env` to the deployed Worker URL (see `.env.example`).
+Set the deployed URL as `VITE_SIGNALING_URL` in your `.env`.
 
-## Testing
-
-```bash
-npx vitest run
-```
+---
 
 ## Security
 
-- All voice is end-to-end encrypted via DTLS-SRTP, built into WebRTC — no custom crypto, no plaintext audio ever leaves the device.
-- The signaling server is an ephemeral relay only: it brokers connection setup and stores zero data.
-- A strict Content-Security-Policy is enforced via Tauri's security config to limit script, network, and media sources.
-- No telemetry, no analytics, no accounts required.
+- All voice is E2E encrypted via DTLS-SRTP (built into WebRTC — not optional)
+- Signaling server stores zero data — ephemeral relay only, rooms destroy on disconnect
+- TURN credentials are server-side only — never shipped in the app binary
+- No accounts, no telemetry, no analytics, no stored messages
+- App binary is signed with a Tauri updater key — updates are verified before installing
+- See [SECURITY.md](SECURITY.md) for full details and known limitations
+
+---
+
+## Known issues
+
+- Windows SmartScreen warning — app is unsigned. Click More info → Run anyway.
+- macOS Gatekeeper block — app is unsigned. See install instructions above.
+- RNNoise ML noise suppression is currently a no-op (the npm package is a stub). Browser-native noise suppression is active. A real RNNoise WASM binary can be dropped in with no code changes.
+- TURN relay uses ExpressTURN free tier (1000 GB/month). More than enough for personal use.
+
+---
+
+## Contributing
+
+Open issues and PRs welcome. See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for the current list of open items.
+
+---
+
+*Built with Tauri v2. macOS and Linux builds are cross-compiled via GitHub Actions.*
