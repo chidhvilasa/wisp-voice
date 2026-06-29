@@ -24,7 +24,22 @@ export class AudioPipeline {
 
     this.audioContext = new AudioContext()
     if (this.audioContext.state === 'suspended') {
-      void this.audioContext.resume?.()
+      try {
+        await this.audioContext.resume()
+      } catch (error) {
+        console.warn('AudioContext.resume() failed, will retry on next user gesture', error)
+      }
+      // Safari/WebKit requires a user gesture before AudioContext can run; if
+      // resume() above didn't take effect yet, this catches the next click.
+      document.addEventListener(
+        'click',
+        () => {
+          if (this.audioContext?.state === 'suspended') {
+            void this.audioContext.resume()
+          }
+        },
+        { once: true },
+      )
     }
     this.source = this.audioContext.createMediaStreamSource(stream)
     this.micGainNode = this.audioContext.createGain()

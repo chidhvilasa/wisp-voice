@@ -38,6 +38,12 @@ function navigate(path: string): void {
 
 type PeerDebugInfo = ReturnType<WispVoiceEngine['getDebugInfo']>[number]
 
+function isMicPermissionError(error: string | null): boolean {
+  if (!error) return false
+  const lower = error.toLowerCase()
+  return lower.includes('microphone') || lower.includes('permission')
+}
+
 function troubleshootingFor(error: string | null): string {
   if (!error) return 'Something went wrong. Please try again.'
   const lower = error.toLowerCase()
@@ -85,6 +91,10 @@ export default function Room() {
   const lastError = useVoiceStore((state) => state.lastError)
   const turnUnavailable = useVoiceStore((state) => state.turnUnavailable)
   const [turnBannerDismissed, setTurnBannerDismissed] = useState(false)
+  const [micBannerDismissed, setMicBannerDismissed] = useState(false)
+  useEffect(() => {
+    setMicBannerDismissed(false)
+  }, [lastError])
 
   const [localStream, setLocalStream] = useState<MediaStream | null>(null)
   useEffect(() => {
@@ -146,6 +156,11 @@ export default function Room() {
     void connect(roomCode, displayName)
   }, [connect, roomCode, displayName])
 
+  const handleRejoin = useCallback(() => {
+    disconnect()
+    void connect(roomCode, displayName)
+  }, [connect, disconnect, roomCode, displayName])
+
   const selfName = displayName || 'You'
 
   const wispPeers: WispPeer[] = [
@@ -199,18 +214,43 @@ export default function Room() {
               Reconnecting...
             </div>
           )}
-          {connectionState === 'error' && (
+          {connectionState === 'error' && isMicPermissionError(lastError) && !micBannerDismissed ? (
             <div className="flex items-center justify-center gap-3 bg-muted-red/20 px-4 py-2 text-sm text-muted-red">
-              <AlertCircle className="h-4 w-4 flex-shrink-0" />
-              <span>{troubleshootingFor(lastError)}</span>
+              <MicOff className="h-4 w-4 flex-shrink-0" />
+              <span>
+                Microphone access denied. Go to System Settings → Privacy &amp; Security → Microphone and
+                enable Wisp, then rejoin.
+              </span>
               <button
                 type="button"
-                onClick={handleRetry}
+                onClick={handleRejoin}
                 className="flex-shrink-0 rounded bg-muted-red/30 px-2 py-1 text-xs font-medium text-text-primary hover:bg-muted-red/40"
               >
-                Retry
+                Rejoin
+              </button>
+              <button
+                type="button"
+                onClick={() => setMicBannerDismissed(true)}
+                aria-label="Dismiss"
+                className="flex-shrink-0 rounded p-0.5 hover:bg-muted-red/40"
+              >
+                <X className="h-4 w-4" />
               </button>
             </div>
+          ) : (
+            connectionState === 'error' && (
+              <div className="flex items-center justify-center gap-3 bg-muted-red/20 px-4 py-2 text-sm text-muted-red">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                <span>{troubleshootingFor(lastError)}</span>
+                <button
+                  type="button"
+                  onClick={handleRetry}
+                  className="flex-shrink-0 rounded bg-muted-red/30 px-2 py-1 text-xs font-medium text-text-primary hover:bg-muted-red/40"
+                >
+                  Retry
+                </button>
+              </div>
+            )
           )}
           {turnUnavailable && !turnBannerDismissed && (
             <div className="flex items-center justify-center gap-3 bg-warning/20 px-4 py-2 text-sm text-warning">

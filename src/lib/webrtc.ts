@@ -116,7 +116,11 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     }
 
     this.roomCode = roomCode
-    this.displayName = displayName
+    // An empty display name would propagate as empty through both the
+    // signaling 'name' param and the DataChannel hello, leaving peers with
+    // nothing to show but the raw hex peer ID forever. Default it so every
+    // peer always has a readable name.
+    this.displayName = displayName.trim() || 'Guest'
     this.setConnectionState('connecting')
     void this.refreshIceServers()
 
@@ -143,6 +147,21 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     } catch (error) {
       this.setConnectionState('error')
       throw error instanceof Error ? error : new Error('Failed to access microphone')
+    }
+
+    if (import.meta.env.DEV) {
+      this.localStream.getAudioTracks().forEach((track) => {
+        console.log('[Wisp audio track]', track.label, 'enabled:', track.enabled, 'readyState:', track.readyState)
+      })
+    }
+
+    if (this.localStream.getAudioTracks().length === 0) {
+      this.setConnectionState('error')
+      const error = new Error(
+        'No microphone track found. Please grant microphone permission in System Settings → Privacy & Security → Microphone',
+      )
+      this.emit('error', error)
+      throw error
     }
 
     for (const track of this.localStream.getAudioTracks()) {
