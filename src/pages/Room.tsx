@@ -23,6 +23,9 @@ import { useVoiceStore } from '../store/voiceStore'
 import { getVoiceEngine, lockRoom } from '../lib/rooms'
 import type { WispVoiceEngine } from '../lib/webrtc'
 import { cn } from '../lib/utils'
+import { getFriends } from '../lib/friends'
+import type { Friend } from '../lib/friends'
+import { presenceClient } from '../lib/presence'
 import MicMeter from '../components/MicMeter'
 import Settings from './Settings'
 import { PeerCard } from '../components/wisp/PeerCard'
@@ -109,6 +112,22 @@ export default function Room() {
   const [showSettings, setShowSettings] = useState(false)
   const [showChat, setShowChat] = useState(false)
   const [showShare, setShowShare] = useState(false)
+  const [friends, setFriends] = useState<Friend[]>([])
+  const [inviteStatus, setInviteStatus] = useState<Record<string, 'idle' | 'sending' | 'sent' | 'offline'>>({})
+  useEffect(() => {
+    if (showShare) setFriends(getFriends())
+  }, [showShare])
+  const handleInviteFriend = useCallback(
+    async (friend: Friend) => {
+      setInviteStatus((prev) => ({ ...prev, [friend.wispId]: 'sending' }))
+      const delivered = await presenceClient.sendInvite(friend.wispId, displayName || 'Guest', roomCode)
+      setInviteStatus((prev) => ({ ...prev, [friend.wispId]: delivered ? 'sent' : 'offline' }))
+      setTimeout(() => {
+        setInviteStatus((prev) => ({ ...prev, [friend.wispId]: 'idle' }))
+      }, 3000)
+    },
+    [displayName, roomCode],
+  )
   const [unreadCount, setUnreadCount] = useState(0)
   const lastSeenMessageCountRef = useRef(0)
   useEffect(() => {
@@ -318,25 +337,70 @@ export default function Room() {
                 {showShare && (
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => setShowShare(false)} />
-                    <div className="absolute left-0 top-full z-20 mt-2 w-64 rounded-card border border-border bg-surface p-4 shadow-lg">
-                      <p className="mb-2 text-xs text-text-secondary">Share this code with friends:</p>
-                      <p className="mb-3 text-center text-2xl font-mono tracking-widest text-text-primary">
-                        {roomCode}
+                    <div className="absolute left-0 top-full z-20 mt-2 w-72 rounded-card border border-border bg-surface p-4 shadow-lg">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-text-tertiary">
+                        Invite to room
                       </p>
-                      <div className="flex flex-col gap-2">
+                      {friends.length === 0 ? (
+                        <p className="py-2 text-xs text-text-tertiary">
+                          No friends added yet. Add friends in Settings.
+                        </p>
+                      ) : (
+                        <ul className="mb-3 flex max-h-48 flex-col gap-1.5 overflow-y-auto">
+                          {friends.map((friend) => {
+                            const status = inviteStatus[friend.wispId] ?? 'idle'
+                            return (
+                              <li key={friend.wispId} className="flex items-center gap-2 rounded-lg p-1.5">
+                                <Avatar id={friend.wispId} name={friend.name} size={28} />
+                                <span className="flex-1 truncate text-sm">{friend.name}</span>
+                                <span
+                                  className={cn(
+                                    'h-1.5 w-1.5 rounded-full',
+                                    friend.online ? 'bg-speaking' : 'bg-text-tertiary/40',
+                                  )}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => void handleInviteFriend(friend)}
+                                  disabled={status === 'sending'}
+                                  className={cn(
+                                    'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                                    status === 'sent'
+                                      ? 'bg-speaking/15 text-speaking'
+                                      : status === 'offline'
+                                        ? 'bg-text-tertiary/15 text-text-tertiary'
+                                        : 'bg-accent text-primary-foreground hover:bg-accent-hover',
+                                  )}
+                                >
+                                  {status === 'sent' ? (
+                                    <span className="flex items-center gap-1">
+                                      <Check size={12} /> Sent
+                                    </span>
+                                  ) : status === 'offline' ? (
+                                    'Offline'
+                                  ) : status === 'sending' ? (
+                                    '...'
+                                  ) : (
+                                    'Invite'
+                                  )}
+                                </button>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      )}
+
+                      <div className="border-t border-border pt-3">
+                        <p className="mb-2 text-xs text-text-secondary">Share room code:</p>
+                        <p className="mb-3 text-center text-2xl font-mono tracking-widest text-text-primary">
+                          {roomCode}
+                        </p>
                         <button
                           type="button"
                           onClick={handleCopyCode}
-                          className="rounded-card bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover"
+                          className="w-full rounded-card bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover"
                         >
-                          {copied ? 'Copied!' : 'Copy'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowShare(false)}
-                          className="rounded-card border border-border px-3 py-1.5 text-sm font-medium text-text-primary hover:bg-surface2"
-                        >
-                          Close
+                          {copied ? 'Copied!' : 'Copy code'}
                         </button>
                       </div>
                     </div>
@@ -527,12 +591,7 @@ export default function Room() {
                   <MessageCircle size={18} />
                 </ToolbarButton>
                 {unreadCount > 0 && (
-                  <span
-                    className={cn(
-                      'absolute -top-1 -right-1 grid h-4 place-items-center rounded-full bg-muted-red px-1 text-[10px] font-bold leading-none text-white',
-                      unreadCount > 9 ? 'min-w-[18px]' : 'min-w-[16px]',
-                    )}
-                  >
+                  <span className="animate-badge-pop absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#EF4444] px-1 text-[11px] font-bold leading-none text-white">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}

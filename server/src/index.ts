@@ -1,5 +1,6 @@
 export interface Env {
   WISP_ROOM: DurableObjectNamespace
+  WISP_PRESENCE: DurableObjectNamespace
   METERED_SECRET_KEY?: string
   EXPRESSTURN_USERNAME?: string
   EXPRESSTURN_PASSWORD?: string
@@ -163,6 +164,50 @@ export class WispRoom {
   }
 }
 
+// One WispPresence Durable Object instance per Wisp ID (keyed via
+// idFromName(wispId)), holding at most one live WebSocket - the device
+// currently online under that ID. /invite delivers by looking up this same
+// instance and pushing down the stored socket; there is nothing to persist
+// across instance restarts, so no storage is used here.
+export class WispPresence {
+  private ws: WebSocket | null = null
+
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url)
+
+    if (request.method === 'POST' && url.pathname === '/deliver') {
+      if (!this.ws) {
+        return new Response('Not online', { status: 404 })
+      }
+      const payload = await request.text()
+      try {
+        this.ws.send(payload)
+        return new Response(null, { status: 200 })
+      } catch {
+        this.ws = null
+        return new Response('Failed to deliver', { status: 404 })
+      }
+    }
+
+    const upgradeHeader = request.headers.get('Upgrade')
+    if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
+      return new Response('Expected websocket', { status: 400 })
+    }
+
+    const pair = new WebSocketPair()
+    const client = pair[0]
+    const server = pair[1]
+    server.accept()
+    this.ws = server
+
+    server.addEventListener('close', () => {
+      if (this.ws === server) this.ws = null
+    })
+
+    return new Response(null, { status: 101, webSocket: client })
+  }
+}
+
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -193,6 +238,25 @@ function isIceServersRateLimited(ip: string): boolean {
   }
   timestamps.push(now)
   iceServersRateLimits.set(ip, timestamps)
+  return false
+}
+
+const WISP_ID_PATTERN = /^[A-Z0-9]{8}$/
+const INVITE_RATE_LIMIT_WINDOW_MS = 60000
+const INVITE_RATE_LIMIT_MAX = 10
+const inviteRateLimits: Map<string, number[]> = new Map()
+
+function isInviteRateLimited(ip: string): boolean {
+  const now = Date.now()
+  const timestamps = (inviteRateLimits.get(ip) ?? []).filter(
+    (t) => now - t < INVITE_RATE_LIMIT_WINDOW_MS,
+  )
+  if (timestamps.length >= INVITE_RATE_LIMIT_MAX) {
+    inviteRateLimits.set(ip, timestamps)
+    return true
+  }
+  timestamps.push(now)
+  inviteRateLimits.set(ip, timestamps)
   return false
 }
 
@@ -281,6 +345,76 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     const id = env.WISP_ROOM.idFromName(code)
     const stub = env.WISP_ROOM.get(id)
     return stub.fetch(request)
+  }
+
+  const presenceMatch = url.pathname.match(/^\/presence\/([^/]+)\/ws$/)
+  if (request.method === 'GET' && presenceMatch) {
+    const wispId = presenceMatch[1]
+    if (!wispId || !WISP_ID_PATTERN.test(wispId)) {
+      return new Response('Invalid Wisp ID', { status: 400, headers: CORS_HEADERS })
+    }
+    const id = env.WISP_PRESENCE.idFromName(wispId)
+    const stub = env.WISP_PRESENCE.get(id)
+    return stub.fetch(request)
+  }
+
+  if (request.method === 'POST' && url.pathname === '/invite') {
+    const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
+    if (isInviteRateLimited(ip)) {
+      return new Response(JSON.stringify({ error: 'Too many requests' }), {
+        status: 429,
+        headers: { 'content-type': 'application/json', ...CORS_HEADERS },
+      })
+    }
+
+    let body: { from?: string; fromName?: string; to?: string; roomCode?: string }
+    try {
+      body = await request.json()
+    } catch {
+      return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+        status: 400,
+        headers: { 'content-type': 'application/json', ...CORS_HEADERS },
+      })
+    }
+
+    const { from, fromName, to, roomCode } = body
+    if (
+      typeof from !== 'string' ||
+      typeof to !== 'string' ||
+      typeof roomCode !== 'string' ||
+      !WISP_ID_PATTERN.test(from) ||
+      !WISP_ID_PATTERN.test(to)
+    ) {
+      return new Response(JSON.stringify({ error: 'Missing or invalid fields' }), {
+        status: 400,
+        headers: { 'content-type': 'application/json', ...CORS_HEADERS },
+      })
+    }
+
+    const id = env.WISP_PRESENCE.idFromName(to)
+    const stub = env.WISP_PRESENCE.get(id)
+    const payload = JSON.stringify({
+      type: 'room-invite',
+      from,
+      fromName: typeof fromName === 'string' ? fromName.slice(0, 32) : '',
+      roomCode,
+    })
+
+    const deliverResponse = await stub.fetch('https://internal/deliver', {
+      method: 'POST',
+      body: payload,
+    })
+
+    if (deliverResponse.status === 200) {
+      return new Response(JSON.stringify({ delivered: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json', ...CORS_HEADERS },
+      })
+    }
+    return new Response(JSON.stringify({ delivered: false }), {
+      status: 404,
+      headers: { 'content-type': 'application/json', ...CORS_HEADERS },
+    })
   }
 
   return new Response('Not found', { status: 404, headers: CORS_HEADERS })

@@ -3,6 +3,7 @@ import type { ChangeEvent, ReactNode } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { currentMonitor } from '@tauri-apps/api/window'
 import {
+  Check,
   ChevronDown,
   CornerDownLeft,
   CornerDownRight,
@@ -15,6 +16,7 @@ import {
   Play,
   Trash2,
   Upload,
+  X,
 } from 'lucide-react'
 import { Dialog, DialogContent } from '../components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
@@ -23,6 +25,9 @@ import { Switch } from '../components/ui/switch'
 import { useSettingsStore } from '../store/settingsStore'
 import { getInputDevices, getLabelOrDefault, getOutputDevices } from '../lib/devices'
 import { checkForUpdate, installUpdate } from '../lib/updater'
+import { getWispId } from '../lib/identity'
+import { addFriend, getFriends, removeFriend, isValidWispId } from '../lib/friends'
+import type { Friend } from '../lib/friends'
 import ResourceWidget from '../components/ResourceWidget'
 import { Avatar } from '../components/wisp/Avatar'
 import { RebindPill } from '../components/wisp/RebindPill'
@@ -31,12 +36,13 @@ import { cn } from '../lib/utils'
 import packageJson from '../../package.json'
 import type { HotkeyMap } from '../types'
 
-type Tab = 'audio' | 'overlay' | 'hotkeys' | 'soundboard' | 'about'
+type Tab = 'audio' | 'overlay' | 'hotkeys' | 'friends' | 'soundboard' | 'about'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'audio', label: 'Audio' },
   { id: 'overlay', label: 'Overlay' },
   { id: 'hotkeys', label: 'Hotkeys' },
+  { id: 'friends', label: 'Friends' },
   { id: 'soundboard', label: 'Soundboard' },
   { id: 'about', label: 'About' },
 ]
@@ -464,6 +470,139 @@ function HotkeysTab() {
   )
 }
 
+function FriendsTab() {
+  const [wispId] = useState(() => getWispId())
+  const [friends, setFriends] = useState<Friend[]>(() => getFriends())
+  const [copied, setCopied] = useState(false)
+  const [newFriendId, setNewFriendId] = useState('')
+  const [newFriendName, setNewFriendName] = useState('')
+  const [addError, setAddError] = useState<string | null>(null)
+  const [hoveredFriend, setHoveredFriend] = useState<string | null>(null)
+
+  const handleCopyId = useCallback(() => {
+    void navigator.clipboard
+      .writeText(wispId)
+      .then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      })
+      .catch(() => {})
+  }, [wispId])
+
+  const handleAddFriend = useCallback(() => {
+    setAddError(null)
+    const candidateId = newFriendId.trim().toUpperCase()
+
+    if (!isValidWispId(candidateId)) {
+      setAddError('Wisp ID must be exactly 8 alphanumeric characters.')
+      return
+    }
+    if (candidateId === wispId) {
+      setAddError("That's your own Wisp ID.")
+      return
+    }
+
+    try {
+      addFriend(candidateId, newFriendName)
+      setFriends(getFriends())
+      setNewFriendId('')
+      setNewFriendName('')
+    } catch (error) {
+      setAddError(error instanceof Error ? error.message : 'Failed to add friend')
+    }
+  }, [newFriendId, newFriendName, wispId])
+
+  const handleRemoveFriend = useCallback((id: string) => {
+    removeFriend(id)
+    setFriends(getFriends())
+  }, [])
+
+  return (
+    <div className="flex flex-col gap-3">
+      <Section title="Your Wisp ID">
+        <div className="flex items-center gap-3 rounded-lg bg-surface2 p-3">
+          <div className="flex-1 font-mono text-2xl tracking-[0.2em] text-accent">{wispId}</div>
+          <button
+            type="button"
+            onClick={handleCopyId}
+            className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs hover:border-border-hover"
+          >
+            {copied ? <Check size={12} className="text-speaking" /> : null}
+            {copied ? 'Copied' : 'Copy ID'}
+          </button>
+        </div>
+        <p className="mt-1.5 text-[11px] text-text-tertiary">Share this with friends so they can add you</p>
+      </Section>
+
+      <Section title="Add a friend">
+        <div className="flex gap-2">
+          <input
+            value={newFriendId}
+            onChange={(event) => setNewFriendId(event.target.value.toUpperCase().slice(0, 8))}
+            placeholder="Enter their Wisp ID (8 characters)"
+            maxLength={8}
+            className="h-[34px] flex-1 rounded-md border border-border bg-surface2 px-2.5 font-mono text-xs outline-none focus:border-accent"
+          />
+          <input
+            value={newFriendName}
+            onChange={(event) => setNewFriendName(event.target.value.slice(0, 32))}
+            placeholder="Their name (optional)"
+            className="h-[34px] flex-1 rounded-md border border-border bg-surface2 px-2.5 text-xs outline-none focus:border-accent"
+          />
+          <button
+            type="button"
+            onClick={handleAddFriend}
+            className="h-[34px] shrink-0 rounded-md bg-accent px-3 text-xs font-semibold text-primary-foreground hover:bg-accent-hover"
+          >
+            Add
+          </button>
+        </div>
+        {addError && <p className="mt-1.5 text-xs text-muted-red">{addError}</p>}
+      </Section>
+
+      <Section title="Friends">
+        {friends.length === 0 ? (
+          <p className="py-4 text-center text-xs text-text-tertiary">
+            No friends added yet. Share your Wisp ID to get started.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-1.5">
+            {friends.map((friend) => (
+              <li
+                key={friend.wispId}
+                onMouseEnter={() => setHoveredFriend(friend.wispId)}
+                onMouseLeave={() => setHoveredFriend((prev) => (prev === friend.wispId ? null : prev))}
+                className="flex items-center gap-3 rounded-lg bg-surface2 p-2"
+              >
+                <Avatar id={friend.wispId} name={friend.name} size={32} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{friend.name}</div>
+                  <div className="font-mono text-[11px] text-text-tertiary">{friend.wispId}</div>
+                </div>
+                <span
+                  className={cn('h-2 w-2 rounded-full', friend.online ? 'bg-speaking' : 'bg-text-tertiary/40')}
+                  aria-label={friend.online ? 'Online' : 'Offline'}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleRemoveFriend(friend.wispId)}
+                  aria-label={`Remove ${friend.name}`}
+                  className={cn(
+                    'grid h-6 w-6 place-items-center rounded-md text-muted-red transition-opacity hover:bg-muted-red/15',
+                    hoveredFriend === friend.wispId ? 'opacity-100' : 'opacity-0',
+                  )}
+                >
+                  <X size={14} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+    </div>
+  )
+}
+
 function SoundboardTab() {
   const soundboardFiles = useSettingsStore((state) => state.soundboardFiles)
   const setSoundboardFile = useSettingsStore((state) => state.setSoundboardFile)
@@ -594,6 +733,9 @@ function AboutTab() {
       setUpdateStatus('available')
     } else {
       setUpdateStatus('up-to-date')
+      setTimeout(() => {
+        setUpdateStatus((current) => (current === 'up-to-date' ? 'idle' : current))
+      }, 3000)
     }
   }, [])
 
@@ -640,7 +782,9 @@ function AboutTab() {
           </button>
         )}
         {updateStatus === 'up-to-date' && (
-          <span className="text-[11px] text-text-tertiary">You are on the latest version (v{packageJson.version})</span>
+          <span className="flex items-center gap-1 text-[11px] text-speaking">
+            <Check size={12} /> You are on the latest version
+          </span>
         )}
       </div>
       <div className="grid grid-cols-3 gap-2">
@@ -723,6 +867,9 @@ export default function Settings({ onClose }: SettingsProps) {
             </TabsContent>
             <TabsContent value="hotkeys" className="mt-0">
               <HotkeysTab />
+            </TabsContent>
+            <TabsContent value="friends" className="mt-0">
+              <FriendsTab />
             </TabsContent>
             <TabsContent value="soundboard" className="mt-0">
               <SoundboardTab />

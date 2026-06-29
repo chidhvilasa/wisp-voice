@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
+import { Download } from 'lucide-react'
 import { checkForUpdate, installUpdate } from '../lib/updater'
 import type { UpdateInfo } from '../lib/updater'
+
+const CHECK_DELAY_MS = 5000
 
 export function UpdateBanner() {
   const [update, setUpdate] = useState<UpdateInfo | null>(null)
@@ -9,13 +12,18 @@ export function UpdateBanner() {
   const [dismissed, setDismissed] = useState(false)
 
   useEffect(() => {
-    // Check for update 3 seconds after app loads
-    // Don't block startup
+    // Never check for updates in dev - there's no installed bundle to
+    // relaunch into, and it would just hit the network on every dev session.
+    if (import.meta.env.DEV) return
+
+    // Check once, 5 seconds after launch, without blocking startup. Checking
+    // only on this one-shot timer (no interval) already satisfies "don't
+    // check again during the same session" - there's nothing to re-trigger it.
     const timer = setTimeout(() => {
       void checkForUpdate().then((info) => {
         if (info.available) setUpdate(info)
       })
-    }, 3000)
+    }, CHECK_DELAY_MS)
     return () => clearTimeout(timer)
   }, [])
 
@@ -33,28 +41,43 @@ export function UpdateBanner() {
 
   return (
     <div
+      className="animate-slide-down"
       style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 9999,
         background: '#7C5CFC',
-        borderRadius: '8px',
-        padding: '10px 16px',
+        height: '44px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: '16px',
-        gap: '12px',
+        padding: '0 16px',
       }}
     >
-      <div style={{ flex: 1 }}>
-        <span style={{ color: 'white', fontSize: '13px', fontWeight: 500 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+        <Download size={16} color="white" />
+        <span
+          style={{
+            color: 'white',
+            fontSize: '13px',
+            fontWeight: 500,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
           Wisp {update.version} is available
         </span>
-        {installing && progress > 0 && (
+        {installing && (
           <div
             style={{
-              marginTop: '6px',
-              background: 'rgba(255,255,255,0.2)',
-              borderRadius: '4px',
-              height: '4px',
+              flex: 1,
+              maxWidth: '160px',
+              background: 'rgba(255,255,255,0.3)',
+              borderRadius: '2px',
+              height: '3px',
               overflow: 'hidden',
             }}
           >
@@ -64,49 +87,52 @@ export function UpdateBanner() {
                 height: '100%',
                 width: `${progress}%`,
                 transition: 'width 300ms ease',
-                borderRadius: '4px',
+                borderRadius: '2px',
               }}
             />
           </div>
         )}
       </div>
-      {!installing ? (
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            onClick={handleUpdate}
-            style={{
-              background: 'white',
-              color: '#7C5CFC',
-              border: 'none',
-              borderRadius: '6px',
-              padding: '6px 14px',
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            Update now
-          </button>
-          <button
-            onClick={() => setDismissed(true)}
-            style={{
-              background: 'rgba(255,255,255,0.2)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              padding: '6px 10px',
-              fontSize: '13px',
-              cursor: 'pointer',
-            }}
-          >
-            Later
-          </button>
-        </div>
-      ) : (
-        <span style={{ color: 'white', fontSize: '13px' }}>
-          {progress > 0 ? `Downloading ${progress}%...` : 'Preparing...'}
-        </span>
-      )}
+      <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+        {!installing ? (
+          <>
+            <button
+              onClick={handleUpdate}
+              style={{
+                background: 'white',
+                color: '#7C5CFC',
+                border: 'none',
+                borderRadius: '6px',
+                height: '32px',
+                padding: '0 14px',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Update now
+            </button>
+            <button
+              onClick={() => setDismissed(true)}
+              style={{
+                background: 'transparent',
+                color: 'white',
+                border: 'none',
+                height: '32px',
+                padding: '0 10px',
+                fontSize: '12px',
+                cursor: 'pointer',
+              }}
+            >
+              Later
+            </button>
+          </>
+        ) : (
+          <span style={{ color: 'white', fontSize: '12px' }}>
+            {progress > 0 ? `Downloading ${progress}%...` : 'Downloading...'}
+          </span>
+        )}
+      </div>
     </div>
   )
 }

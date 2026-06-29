@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Copy, Share2, Ghost, Loader2, Check, X } from 'lucide-react'
+import { Copy, Share2, Ghost, Loader2, Check, X, Settings as SettingsIcon } from 'lucide-react'
 import { createRoom, getRecentRooms, joinRoom, removeRecentRoom, saveRecentRoom } from '../lib/rooms'
 import { useSettingsStore } from '../store/settingsStore'
 import { useVoiceStore } from '../store/voiceStore'
 import ResourceWidget from '../components/ResourceWidget'
-import { UpdateBanner } from '../components/UpdateBanner'
+import Settings from './Settings'
 import { WispLogo } from '../components/wisp/WispLogo'
 import { Avatar } from '../components/wisp/Avatar'
 import { cn } from '../lib/utils'
@@ -42,6 +42,7 @@ export default function Home() {
   const [joining, setJoining] = useState(false)
   const [joinError, setJoinError] = useState<string | null>(null)
 
+  const [showSettings, setShowSettings] = useState(false)
   const [recentRooms, setRecentRooms] = useState<RecentRoom[]>([])
   const [removingCodes, setRemovingCodes] = useState<Record<string, 'fading' | 'collapsing'>>({})
 
@@ -147,9 +148,16 @@ export default function Home() {
 
   return (
     <main className="flex min-h-screen justify-center overflow-y-auto bg-bg px-6 py-10">
-      <div className="w-full max-w-[460px] space-y-6">
-        <UpdateBanner />
+      <button
+        type="button"
+        onClick={() => setShowSettings(true)}
+        aria-label="Open settings"
+        className="fixed top-4 right-4 grid h-9 w-9 place-items-center rounded-full bg-surface2 text-text-secondary transition-[filter] hover:brightness-[1.2]"
+      >
+        <SettingsIcon size={16} />
+      </button>
 
+      <div className="w-full max-w-[460px] space-y-6">
         <header className="flex items-center justify-between">
           <WispLogo />
           <span className="rounded-full border border-border bg-surface2 px-2.5 py-1 text-[11px] text-text-tertiary">
@@ -315,6 +323,8 @@ export default function Home() {
       <div className="fixed bottom-4 right-4">
         <ResourceWidget />
       </div>
+
+      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
     </main>
   )
 }
