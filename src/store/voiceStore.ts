@@ -38,6 +38,7 @@ interface VoiceState {
   addChatMessage: (message: ChatMessage) => void
   setLastError: (error: string | null) => void
   setTurnUnavailable: (turnUnavailable: boolean) => void
+  republishState: () => void
   reset: () => void
 }
 
@@ -56,7 +57,7 @@ const initialState = {
   turnUnavailable: false,
 }
 
-export const useVoiceStore = create<VoiceState>((set) => ({
+export const useVoiceStore = create<VoiceState>((set, get) => ({
   ...initialState,
 
   setRoomCode: (roomCode) => set({ roomCode }),
@@ -104,6 +105,16 @@ export const useVoiceStore = create<VoiceState>((set) => ({
   setLastError: (lastError) => set({ lastError }),
 
   setTurnUnavailable: (turnUnavailable) => set({ turnUnavailable }),
+
+  // The overlay window is re-navigated (full reload) each time it's shown,
+  // so its 'peers-updated'/'mute-changed' listeners only see future events.
+  // Calling this when the overlay becomes visible replays current state so
+  // peers who joined while it was hidden aren't missing.
+  republishState: () => {
+    const state = get()
+    emitSafe('peers-updated', Array.from(state.peers.values()))
+    emitSafe('mute-changed', state.localMuted)
+  },
 
   reset: () =>
     set({

@@ -26,6 +26,7 @@ interface SettingsState {
   outputVolume: number
   noiseSuppression: boolean
   echoCancellation: boolean
+  soundEffects: boolean
   audioDucking: boolean
   duckAmount: number
   vadThreshold: number
@@ -49,6 +50,7 @@ interface SettingsState {
   setOutputVolume: (volume: number) => void
   setNoiseSuppression: (enabled: boolean) => void
   setEchoCancellation: (enabled: boolean) => void
+  setSoundEffects: (enabled: boolean) => void
   setAudioDucking: (enabled: boolean) => void
   setDuckAmount: (amount: number) => void
   setVadThreshold: (threshold: number) => void
@@ -76,6 +78,7 @@ export const useSettingsStore = create<SettingsState>()(
       outputVolume: 1.0,
       noiseSuppression: true,
       echoCancellation: true,
+      soundEffects: true,
       audioDucking: true,
       duckAmount: 0.2,
       vadThreshold: -50,
@@ -99,6 +102,7 @@ export const useSettingsStore = create<SettingsState>()(
       setOutputVolume: (volume) => set({ outputVolume: volume }),
       setNoiseSuppression: (enabled) => set({ noiseSuppression: enabled }),
       setEchoCancellation: (enabled) => set({ echoCancellation: enabled }),
+      setSoundEffects: (enabled) => set({ soundEffects: enabled }),
       setAudioDucking: (enabled) => set({ audioDucking: enabled }),
       setDuckAmount: (amount) => set({ duckAmount: amount }),
       setVadThreshold: (threshold) => set({ vadThreshold: threshold }),

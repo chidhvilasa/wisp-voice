@@ -169,6 +169,7 @@ function AudioTab() {
   const outputVolume = useSettingsStore((state) => state.outputVolume)
   const noiseSuppression = useSettingsStore((state) => state.noiseSuppression)
   const echoCancellation = useSettingsStore((state) => state.echoCancellation)
+  const soundEffects = useSettingsStore((state) => state.soundEffects)
   const audioDucking = useSettingsStore((state) => state.audioDucking)
   const duckAmount = useSettingsStore((state) => state.duckAmount)
   const vadThreshold = useSettingsStore((state) => state.vadThreshold)
@@ -183,6 +184,7 @@ function AudioTab() {
   const setOutputVolume = useSettingsStore((state) => state.setOutputVolume)
   const setNoiseSuppression = useSettingsStore((state) => state.setNoiseSuppression)
   const setEchoCancellation = useSettingsStore((state) => state.setEchoCancellation)
+  const setSoundEffects = useSettingsStore((state) => state.setSoundEffects)
   const setAudioDucking = useSettingsStore((state) => state.setAudioDucking)
   const setDuckAmount = useSettingsStore((state) => state.setDuckAmount)
   const setVadThreshold = useSettingsStore((state) => state.setVadThreshold)
@@ -257,6 +259,9 @@ function AudioTab() {
         </Row>
         <Row label="Audio ducking">
           <Switch checked={audioDucking} onCheckedChange={setAudioDucking} />
+        </Row>
+        <Row label="Sound effects">
+          <Switch checked={soundEffects} onCheckedChange={setSoundEffects} />
         </Row>
         {audioDucking && (
           <div className="animate-fade-scale-in border-l-2 border-accent/40 pl-4">

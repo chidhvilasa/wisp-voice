@@ -8,6 +8,7 @@ export interface WispVoiceEngineEvents {
   'peer-joined': (peerId: string) => void
   'peer-left': (peerId: string) => void
   'peer-name': (peerId: string, name: string) => void
+  'peer-state-update': (peerId: string, muted: boolean, deafened: boolean) => void
   speaking: (peerId: string, isSpeaking: boolean) => void
   'connection-state-change': (state: ConnectionState) => void
   'chat-message': (message: ChatMessage) => void
@@ -263,6 +264,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
         track.enabled = !muted
       }
     }
+    this.broadcastState()
   }
 
   setDeafened(deafened: boolean): void {
@@ -837,21 +839,35 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
   private setupDataChannel(remoteId: string, channel: RTCDataChannel): void {
     this.dataChannels.set(remoteId, channel)
 
-    const sendHello = () => {
+    const announce = () => {
       try {
         channel.send(JSON.stringify({ type: 'hello', name: this.displayName }))
+        channel.send(JSON.stringify({ type: 'state-update', muted: this.muted, deafened: this.deafened }))
       } catch (error) {
         console.warn('Failed to send hello to peer', error)
       }
     }
     if (channel.readyState === 'open') {
-      sendHello()
+      announce()
     } else {
-      channel.onopen = sendHello
+      channel.onopen = announce
     }
 
     channel.onmessage = (event: MessageEvent) => {
       this.handleDataChannelMessage(remoteId, event.data as string)
+    }
+  }
+
+  private broadcastState(): void {
+    const payload = JSON.stringify({ type: 'state-update', muted: this.muted, deafened: this.deafened })
+    for (const channel of this.dataChannels.values()) {
+      if (channel.readyState === 'open') {
+        try {
+          channel.send(payload)
+        } catch (error) {
+          console.warn('Failed to broadcast mute/deafen state to a peer', error)
+        }
+      }
     }
   }
 
@@ -866,6 +882,11 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
     if (message['type'] === 'hello') {
       const name = message['name'] as string
       if (name) this.emit('peer-name', remoteId, name)
+      return
+    }
+
+    if (message['type'] === 'state-update') {
+      this.emit('peer-state-update', remoteId, Boolean(message['muted']), Boolean(message['deafened']))
       return
     }
 

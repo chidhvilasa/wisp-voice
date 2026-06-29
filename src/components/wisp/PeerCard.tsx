@@ -34,16 +34,15 @@ export function PeerCard({ peer, volume = 100, onVolumeChange, avatarSize = 68, 
           )}
         />
         <Avatar id={peer.id} name={peer.name} size={avatarSize} />
-        {peer.muted && (
+        {peer.deafened ? (
+          <span className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full bg-warning text-white border-2 border-surface">
+            <HeadphoneOff size={12} />
+          </span>
+        ) : peer.muted ? (
           <span className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full bg-muted-red text-white border-2 border-surface">
             <MicOff size={12} />
           </span>
-        )}
-        {peer.deafened && (
-          <span className="absolute -top-1 -right-1 grid h-6 w-6 place-items-center rounded-full bg-muted-red text-white border-2 border-surface">
-            <HeadphoneOff size={12} />
-          </span>
-        )}
+        ) : null}
       </div>
 
       <div className="flex items-center gap-2">

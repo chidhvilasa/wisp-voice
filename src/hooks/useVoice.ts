@@ -3,9 +3,15 @@ import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { getVoiceEngine } from '../lib/rooms'
 import { createReconnectScheduler } from '../lib/reconnect'
+import { playSound } from '../lib/sounds'
+import type { SoundType } from '../lib/sounds'
 import { useVoiceStore } from '../store/voiceStore'
 import { useSettingsStore } from '../store/settingsStore'
 import type { ChatMessage, ConnectionState, Peer, PeerStats } from '../types'
+
+function maybePlaySound(type: SoundType): void {
+  if (useSettingsStore.getState().soundEffects) playSound(type)
+}
 
 export interface UseVoiceResult {
   connect: (roomCode: string, displayName: string) => Promise<void>
@@ -93,11 +99,13 @@ export function useVoice(): UseVoiceResult {
     const next = !localMuted
     engineRef.current.setMuted(next)
     setLocalMuted(next)
+    maybePlaySound(next ? 'mute' : 'unmute')
   }, [localMuted, setLocalMuted])
 
   const toggleDeafen = useCallback(() => {
     const next = !localDeafened
     engineRef.current.setDeafened(next)
+    maybePlaySound(next ? 'mute' : 'unmute')
     if (next) {
       setPreviousMutedState(localMuted)
       setLocalMuted(true)
@@ -153,11 +161,13 @@ export function useVoice(): UseVoiceResult {
         latencyMs: existing?.latencyMs ?? 0,
         connecting: false,
       })
+      maybePlaySound('join')
     }
 
     const handlePeerLeft = (peerId: string) => {
       debug('peer-left', peerId)
       removePeer(peerId)
+      maybePlaySound('leave')
     }
 
     const handlePeerName = (peerId: string, name: string) => {
@@ -173,6 +183,14 @@ export function useVoice(): UseVoiceResult {
       const peer = useVoiceStore.getState().peers.get(peerId)
       if (peer) {
         setPeer({ ...peer, speaking: isSpeaking })
+      }
+    }
+
+    const handlePeerStateUpdate = (peerId: string, muted: boolean, deafened: boolean) => {
+      debug('peer-state-update', peerId, muted, deafened)
+      const peer = useVoiceStore.getState().peers.get(peerId)
+      if (peer) {
+        setPeer({ ...peer, muted, deafened })
       }
     }
 
@@ -194,6 +212,9 @@ export function useVoice(): UseVoiceResult {
     const handleChatMessage = (message: ChatMessage) => {
       debug('chat-message', message)
       addChatMessage(message)
+      if (message.from !== useVoiceStore.getState().displayName) {
+        maybePlaySound('message')
+      }
     }
 
     const handlePeerStats = (stats: Map<string, PeerStats>) => {
@@ -222,6 +243,7 @@ export function useVoice(): UseVoiceResult {
     engine.on('peer-left', handlePeerLeft)
     engine.on('peer-name', handlePeerName)
     engine.on('speaking', handleSpeaking)
+    engine.on('peer-state-update', handlePeerStateUpdate)
     engine.on('connection-state-change', handleConnectionStateChange)
     engine.on('chat-message', handleChatMessage)
     engine.on('peer-stats', handlePeerStats)
@@ -234,6 +256,7 @@ export function useVoice(): UseVoiceResult {
       engine.off('peer-left', handlePeerLeft)
       engine.off('peer-name', handlePeerName)
       engine.off('speaking', handleSpeaking)
+      engine.off('peer-state-update', handlePeerStateUpdate)
       engine.off('connection-state-change', handleConnectionStateChange)
       engine.off('chat-message', handleChatMessage)
       engine.off('peer-stats', handlePeerStats)
@@ -284,7 +307,9 @@ export function useVoice(): UseVoiceResult {
 
     const handleOverlayToggle = () => {
       overlayVisibleRef.current = !overlayVisibleRef.current
-      void invoke(overlayVisibleRef.current ? 'show_overlay' : 'hide_overlay').catch(() => {})
+      const showing = overlayVisibleRef.current
+      void invoke(showing ? 'show_overlay' : 'hide_overlay').catch(() => {})
+      if (showing) useVoiceStore.getState().republishState()
     }
 
     const handleOverlayMode = () => {

@@ -10,11 +10,23 @@ Wisp is a lightweight, desktop-only voice chat app built for gamers. It is a rea
 
 | Platform | Download |
 |---|---|
-| Windows | [Wisp_0.2.0_x64-setup.exe](https://github.com/chidhvilasa/wisp-voice/releases/latest) |
-| macOS (Intel + Apple Silicon) | [Wisp_0.2.0_universal.dmg](https://github.com/chidhvilasa/wisp-voice/releases/latest) |
-| Linux | [Wisp_0.2.0_amd64.AppImage](https://github.com/chidhvilasa/wisp-voice/releases/latest) |
+| Windows | [Windows installer (.exe)](https://github.com/chidhvilasa/wisp-voice/releases/latest) |
+| macOS (Intel + Apple Silicon) | [macOS disk image (.dmg)](https://github.com/chidhvilasa/wisp-voice/releases/latest) |
+| Linux | [Linux AppImage](https://github.com/chidhvilasa/wisp-voice/releases/latest) |
 
 > Built with Tauri v2. macOS and Linux builds are cross-compiled via GitHub Actions.
+
+## Windows Installation
+
+Windows may show a SmartScreen warning "Windows protected your PC". This happens because Wisp is not yet code-signed (signing requires a paid certificate).
+
+To install:
+
+1. Click "More info" on the SmartScreen dialog
+2. Click "Run anyway"
+3. Wisp will install normally
+
+This is safe - Wisp is open source and you can review all code at this repo.
 
 ### macOS: "Apple cannot verify this app"
 
@@ -37,7 +49,7 @@ Wisp's macOS build isn't signed with an Apple Developer certificate yet, so Gate
 
 - **Voice and chat data** flow directly peer-to-peer over WebRTC once connected; the relay never sees decrypted audio.
 - **Signaling** (SDP/ICE exchange, room membership) goes through a Cloudflare Worker over WebSocket — it brokers the handshake and stores no persistent data.
-- **TURN fallback** (openrelay.metered.ca, free tier) is used only when a direct P2P path can't be established.
+- **TURN fallback** is used only when a direct P2P path can't be established. TURN credentials (ExpressTURN, OpenRelay) are fetched from the signaling worker's `/ice-servers` endpoint at connect time and are never hardcoded in the client — the worker holds them as encrypted secrets.
 
 ## Tech Stack
 
@@ -49,7 +61,7 @@ Wisp's macOS build isn't signed with an Apple Developer certificate yet, so Gate
 | WebRTC | Native RTCPeerConnection + simple-peer |
 | Audio | Web Audio API + RNNoise (AudioWorklet) |
 | Signaling | Cloudflare Workers + Durable Objects (WebSocket) |
-| STUN/TURN | Google STUN (free) + openrelay.metered.ca (free) |
+| STUN/TURN | Google/Cloudflare STUN (free) + ExpressTURN + OpenRelay (server-delivered) |
 | Hotkeys | tauri-plugin-global-shortcut |
 | Logging | tauri-plugin-log |
 | Testing | Vitest |

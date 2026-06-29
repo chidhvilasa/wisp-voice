@@ -26,11 +26,14 @@ export function OverlayCompact({ peers, className }: CompactProps) {
           >
             <Avatar id={p.id} name={p.name} size={28} />
           </div>
-          {p.muted && (
-            <span className="absolute -bottom-0.5 -right-0.5 grid h-3.5 w-3.5 place-items-center rounded-full bg-muted-red text-white">
-              <MicOff size={8} />
-            </span>
-          )}
+          <span
+            className={cn(
+              "absolute -bottom-0.5 -right-0.5 grid h-3.5 w-3.5 place-items-center rounded-full text-white",
+              p.muted ? "bg-muted-red" : "bg-speaking",
+            )}
+          >
+            {p.muted && <MicOff size={8} />}
+          </span>
         </div>
       ))}
     </div>
