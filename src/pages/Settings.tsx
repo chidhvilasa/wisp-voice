@@ -901,7 +901,7 @@ export default function Settings({ onClose }: SettingsProps) {
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         className={cn(
-          'flex w-[720px] max-w-[720px] max-h-[95vh] flex-col rounded-2xl border border-border bg-surface p-0',
+          'flex w-[800px] max-w-[800px] h-[620px] max-h-[90vh] flex-col rounded-2xl border border-border bg-surface p-0',
           'animate-fade-scale-in shadow-2xl',
         )}
       >
@@ -913,15 +913,20 @@ export default function Settings({ onClose }: SettingsProps) {
           </div>
         </header>
 
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Tab)} className="flex-col">
-          <TabsList className="h-auto w-full shrink-0 flex-nowrap justify-start gap-0.5 rounded-none border-b border-border bg-transparent px-5 py-2">
+        <Tabs
+          orientation="vertical"
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as Tab)}
+          className="min-h-0 flex-1 flex-row gap-0"
+        >
+          <TabsList className="h-full w-[160px] shrink-0 flex-col items-stretch gap-0.5 overflow-y-auto rounded-none border-r border-border bg-transparent p-3">
             {TABS.map((tab) => (
               <TabsTrigger
                 key={tab.id}
                 value={tab.id}
                 className={cn(
-                  'rounded-none border-b-2 border-transparent bg-transparent px-4 py-2.5 text-[13px] whitespace-nowrap',
-                  'data-active:border-accent data-active:bg-transparent data-active:text-text-primary data-active:shadow-none',
+                  'h-auto w-full flex-none grow-0 justify-start rounded-lg border-0 px-3 py-2 text-left text-[13px] whitespace-nowrap',
+                  'data-active:bg-surface2 data-active:text-text-primary data-active:shadow-none',
                 )}
               >
                 {tab.label}
@@ -929,7 +934,7 @@ export default function Settings({ onClose }: SettingsProps) {
             ))}
           </TabsList>
 
-          <div className="px-5 py-3">
+          <div className="min-w-0 flex-1 overflow-y-auto px-5 py-4">
             <TabsContent value="audio" className="mt-0">
               <AudioTab />
             </TabsContent>
