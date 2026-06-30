@@ -1,6 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getWispId } from './identity'
-import { addFriend, getFriends, removeFriend } from './friends'
+
+const { sendFriendRequest, sendFriendAccepted } = vi.hoisted(() => ({
+  sendFriendRequest: vi.fn().mockResolvedValue(true),
+  sendFriendAccepted: vi.fn().mockResolvedValue(true),
+}))
+
+vi.mock('./presence', () => ({
+  presenceClient: { sendFriendRequest, sendFriendAccepted },
+}))
+
+const { addFriend, getFriends, removeFriend } = await import('./friends')
 
 class MockLocalStorage {
   private store = new Map<string, string>()
@@ -44,6 +54,8 @@ describe('identity', () => {
 describe('friends', () => {
   beforeEach(() => {
     vi.stubGlobal('localStorage', new MockLocalStorage())
+    sendFriendRequest.mockClear().mockResolvedValue(true)
+    sendFriendAccepted.mockClear().mockResolvedValue(true)
   })
 
   afterEach(() => {
@@ -54,24 +66,34 @@ describe('friends', () => {
     expect(getFriends()).toEqual([])
   })
 
-  it('addFriend() validates the Wisp ID format', () => {
-    expect(() => addFriend('short', 'Bob')).toThrow(/8 alphanumeric/i)
-    expect(() => addFriend('toolongwispid', 'Bob')).toThrow(/8 alphanumeric/i)
-
-    const friend = addFriend('abcd1234', 'Bob')
-    expect(friend.wispId).toBe('ABCD1234')
-    expect(getFriends()).toHaveLength(1)
+  it('addFriend() validates the Wisp ID format', async () => {
+    await expect(addFriend('short')).rejects.toThrow(/8 alphanumeric/i)
+    await expect(addFriend('toolongwispid')).rejects.toThrow(/8 alphanumeric/i)
+    expect(sendFriendRequest).not.toHaveBeenCalled()
   })
 
-  it('addFriend() rejects duplicate IDs', () => {
-    addFriend('ABCD1234', 'Bob')
-    expect(() => addFriend('ABCD1234', 'Bob Again')).toThrow(/already/i)
-    expect(getFriends()).toHaveLength(1)
+  it('addFriend() sends a request and stores it as pending, not as an immediate friend', async () => {
+    await addFriend('abcd1234')
+    expect(sendFriendRequest).toHaveBeenCalledWith('ABCD1234', expect.any(String))
+    expect(getFriends()).toEqual([])
+  })
+
+  it('addFriend() rejects duplicate IDs that are already friends', async () => {
+    localStorage.setItem(
+      'wisp-friends',
+      JSON.stringify([{ wispId: 'ABCD1234', name: 'Bob', addedAt: Date.now(), online: false }]),
+    )
+    await expect(addFriend('ABCD1234')).rejects.toThrow(/already/i)
   })
 
   it('removeFriend() removes the matching friend', () => {
-    addFriend('ABCD1234', 'Bob')
-    addFriend('WXYZ7890', 'Alice')
+    localStorage.setItem(
+      'wisp-friends',
+      JSON.stringify([
+        { wispId: 'ABCD1234', name: 'Bob', addedAt: Date.now(), online: false },
+        { wispId: 'WXYZ7890', name: 'Alice', addedAt: Date.now(), online: false },
+      ]),
+    )
     expect(getFriends()).toHaveLength(2)
 
     removeFriend('ABCD1234')

@@ -9,19 +9,28 @@ interface PeerCardProps {
   peer: Peer;
   volume?: number;
   onVolumeChange?: (v: number) => void;
-  avatarSize?: 28 | 32 | 36 | 48 | 68 | 72 | 80 | 120;
+  avatarSize?: 28 | 32 | 36 | 48 | 60 | 68 | 72 | 80 | 120;
+  minHeight?: number;
   className?: string;
 }
 
-export function PeerCard({ peer, volume = 100, onVolumeChange, avatarSize = 68, className }: PeerCardProps) {
+export function PeerCard({
+  peer,
+  volume = 100,
+  onVolumeChange,
+  avatarSize = 68,
+  minHeight,
+  className,
+}: PeerCardProps) {
   const [hovered, setHovered] = React.useState(false);
 
   return (
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      style={minHeight ? { minHeight } : undefined}
       className={cn(
-        "relative rounded-xl bg-surface border p-4 flex flex-col items-center gap-3 transition-colors",
+        "relative rounded-xl bg-surface border p-4 flex flex-col items-center justify-center gap-3 transition-colors",
         peer.isSelf ? "border-accent/60" : "border-border hover:border-border-hover",
         className,
       )}

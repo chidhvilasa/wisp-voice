@@ -361,20 +361,14 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
   if (request.method === 'POST' && url.pathname === '/invite') {
     const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
     if (isInviteRateLimited(ip)) {
-      return new Response(JSON.stringify({ error: 'Too many requests' }), {
-        status: 429,
-        headers: { 'content-type': 'application/json', ...CORS_HEADERS },
-      })
+      return jsonResponse({ error: 'Too many requests' }, 429)
     }
 
     let body: { from?: string; fromName?: string; to?: string; roomCode?: string }
     try {
       body = await request.json()
     } catch {
-      return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
-        status: 400,
-        headers: { 'content-type': 'application/json', ...CORS_HEADERS },
-      })
+      return jsonResponse({ error: 'Invalid JSON body' }, 400)
     }
 
     const { from, fromName, to, roomCode } = body
@@ -385,39 +379,100 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
       !WISP_ID_PATTERN.test(from) ||
       !WISP_ID_PATTERN.test(to)
     ) {
-      return new Response(JSON.stringify({ error: 'Missing or invalid fields' }), {
-        status: 400,
-        headers: { 'content-type': 'application/json', ...CORS_HEADERS },
-      })
+      return jsonResponse({ error: 'Missing or invalid fields' }, 400)
     }
 
-    const id = env.WISP_PRESENCE.idFromName(to)
-    const stub = env.WISP_PRESENCE.get(id)
-    const payload = JSON.stringify({
+    return deliverToWispId(env, to, {
       type: 'room-invite',
       from,
       fromName: typeof fromName === 'string' ? fromName.slice(0, 32) : '',
       roomCode,
     })
+  }
 
-    const deliverResponse = await stub.fetch('https://internal/deliver', {
-      method: 'POST',
-      body: payload,
-    })
-
-    if (deliverResponse.status === 200) {
-      return new Response(JSON.stringify({ delivered: true }), {
-        status: 200,
-        headers: { 'content-type': 'application/json', ...CORS_HEADERS },
-      })
+  if (request.method === 'POST' && url.pathname === '/friend-request') {
+    const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
+    if (isInviteRateLimited(ip)) {
+      return jsonResponse({ error: 'Too many requests' }, 429)
     }
-    return new Response(JSON.stringify({ delivered: false }), {
-      status: 404,
-      headers: { 'content-type': 'application/json', ...CORS_HEADERS },
+
+    let body: { from?: string; fromName?: string; to?: string }
+    try {
+      body = await request.json()
+    } catch {
+      return jsonResponse({ error: 'Invalid JSON body' }, 400)
+    }
+
+    const { from, fromName, to } = body
+    if (
+      typeof from !== 'string' ||
+      typeof to !== 'string' ||
+      !WISP_ID_PATTERN.test(from) ||
+      !WISP_ID_PATTERN.test(to)
+    ) {
+      return jsonResponse({ error: 'Missing or invalid fields' }, 400)
+    }
+
+    return deliverToWispId(env, to, {
+      type: 'friend-request',
+      from,
+      fromName: typeof fromName === 'string' ? fromName.slice(0, 32) : '',
+    })
+  }
+
+  if (request.method === 'POST' && url.pathname === '/friend-accept') {
+    const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
+    if (isInviteRateLimited(ip)) {
+      return jsonResponse({ error: 'Too many requests' }, 429)
+    }
+
+    let body: { from?: string; name?: string; to?: string }
+    try {
+      body = await request.json()
+    } catch {
+      return jsonResponse({ error: 'Invalid JSON body' }, 400)
+    }
+
+    const { from, name, to } = body
+    if (
+      typeof from !== 'string' ||
+      typeof to !== 'string' ||
+      !WISP_ID_PATTERN.test(from) ||
+      !WISP_ID_PATTERN.test(to)
+    ) {
+      return jsonResponse({ error: 'Missing or invalid fields' }, 400)
+    }
+
+    return deliverToWispId(env, to, {
+      type: 'friend-accepted',
+      from,
+      name: typeof name === 'string' ? name.slice(0, 32) : '',
     })
   }
 
   return new Response('Not found', { status: 404, headers: CORS_HEADERS })
+}
+
+function jsonResponse(body: unknown, status: number): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json', ...CORS_HEADERS },
+  })
+}
+
+async function deliverToWispId(env: Env, to: string, payload: Record<string, string>): Promise<Response> {
+  const id = env.WISP_PRESENCE.idFromName(to)
+  const stub = env.WISP_PRESENCE.get(id)
+
+  const deliverResponse = await stub.fetch('https://internal/deliver', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+
+  if (deliverResponse.status === 200) {
+    return jsonResponse({ delivered: true }, 200)
+  }
+  return jsonResponse({ delivered: false }, 404)
 }
 
 export default {

@@ -26,8 +26,16 @@ import { useSettingsStore } from '../store/settingsStore'
 import { getInputDevices, getLabelOrDefault, getOutputDevices } from '../lib/devices'
 import { checkForUpdate, installUpdate } from '../lib/updater'
 import { getWispId } from '../lib/identity'
-import { addFriend, getFriends, removeFriend, isValidWispId } from '../lib/friends'
-import type { Friend } from '../lib/friends'
+import {
+  acceptRequest,
+  addFriend,
+  declineRequest,
+  getFriends,
+  getPendingOutgoing,
+  getPendingRequests,
+  removeFriend,
+} from '../lib/friends'
+import type { Friend, FriendRequest, PendingOutgoing } from '../lib/friends'
 import ResourceWidget from '../components/ResourceWidget'
 import { Avatar } from '../components/wisp/Avatar'
 import { RebindPill } from '../components/wisp/RebindPill'
@@ -211,12 +219,12 @@ function AudioTab() {
   return (
     <div className="flex flex-col gap-3">
       <Section title="Input / Output">
-        <div className="flex items-center justify-between gap-3 py-2">
-          <span className="text-[13px]">Input device</span>
+        <div className="py-2">
+          <span className="mb-1.5 block text-[13px]">Input device</span>
           <select
             value={inputDevice}
             onChange={(event) => setInputDevice(event.target.value)}
-            className="h-[34px] w-[260px] truncate rounded-md border border-border bg-surface2 px-2.5 text-xs outline-none focus:border-accent"
+            className="h-[34px] w-full truncate rounded-md border border-border bg-surface2 px-2.5 text-xs outline-none focus:border-accent"
           >
             <option value="">System default</option>
             {inputDevices.map((device, index) => (
@@ -226,12 +234,12 @@ function AudioTab() {
             ))}
           </select>
         </div>
-        <div className="flex items-center justify-between gap-3 py-2">
-          <span className="text-[13px]">Output device</span>
+        <div className="py-2">
+          <span className="mb-1.5 block text-[13px]">Output device</span>
           <select
             value={outputDevice}
             onChange={(event) => setOutputDevice(event.target.value)}
-            className="h-[34px] w-[260px] truncate rounded-md border border-border bg-surface2 px-2.5 text-xs outline-none focus:border-accent"
+            className="h-[34px] w-full truncate rounded-md border border-border bg-surface2 px-2.5 text-xs outline-none focus:border-accent"
           >
             <option value="">System default</option>
             {outputDevices.map((device, index) => (
@@ -473,11 +481,19 @@ function HotkeysTab() {
 function FriendsTab() {
   const [wispId] = useState(() => getWispId())
   const [friends, setFriends] = useState<Friend[]>(() => getFriends())
+  const [pendingOutgoing, setPendingOutgoing] = useState<PendingOutgoing[]>(() => getPendingOutgoing())
+  const [pendingIncoming, setPendingIncoming] = useState<FriendRequest[]>(() => getPendingRequests())
   const [copied, setCopied] = useState(false)
   const [newFriendId, setNewFriendId] = useState('')
-  const [newFriendName, setNewFriendName] = useState('')
   const [addError, setAddError] = useState<string | null>(null)
+  const [sending, setSending] = useState(false)
   const [hoveredFriend, setHoveredFriend] = useState<string | null>(null)
+
+  const refresh = useCallback(() => {
+    setFriends(getFriends())
+    setPendingOutgoing(getPendingOutgoing())
+    setPendingIncoming(getPendingRequests())
+  }, [])
 
   const handleCopyId = useCallback(() => {
     void navigator.clipboard
@@ -492,30 +508,41 @@ function FriendsTab() {
   const handleAddFriend = useCallback(() => {
     setAddError(null)
     const candidateId = newFriendId.trim().toUpperCase()
+    setSending(true)
+    addFriend(candidateId)
+      .then(() => {
+        setNewFriendId('')
+        refresh()
+      })
+      .catch((error: unknown) => {
+        setAddError(error instanceof Error ? error.message : 'Failed to send request')
+      })
+      .finally(() => setSending(false))
+  }, [newFriendId, refresh])
 
-    if (!isValidWispId(candidateId)) {
-      setAddError('Wisp ID must be exactly 8 alphanumeric characters.')
-      return
-    }
-    if (candidateId === wispId) {
-      setAddError("That's your own Wisp ID.")
-      return
-    }
+  const handleRemoveFriend = useCallback(
+    (id: string) => {
+      removeFriend(id)
+      refresh()
+    },
+    [refresh],
+  )
 
-    try {
-      addFriend(candidateId, newFriendName)
-      setFriends(getFriends())
-      setNewFriendId('')
-      setNewFriendName('')
-    } catch (error) {
-      setAddError(error instanceof Error ? error.message : 'Failed to add friend')
-    }
-  }, [newFriendId, newFriendName, wispId])
+  const handleAccept = useCallback(
+    (fromWispId: string) => {
+      acceptRequest(fromWispId)
+      refresh()
+    },
+    [refresh],
+  )
 
-  const handleRemoveFriend = useCallback((id: string) => {
-    removeFriend(id)
-    setFriends(getFriends())
-  }, [])
+  const handleDecline = useCallback(
+    (fromWispId: string) => {
+      declineRequest(fromWispId)
+      refresh()
+    },
+    [refresh],
+  )
 
   return (
     <div className="flex flex-col gap-3">
@@ -543,30 +570,66 @@ function FriendsTab() {
             maxLength={8}
             className="h-[34px] flex-1 rounded-md border border-border bg-surface2 px-2.5 font-mono text-xs outline-none focus:border-accent"
           />
-          <input
-            value={newFriendName}
-            onChange={(event) => setNewFriendName(event.target.value.slice(0, 32))}
-            placeholder="Their name (optional)"
-            className="h-[34px] flex-1 rounded-md border border-border bg-surface2 px-2.5 text-xs outline-none focus:border-accent"
-          />
           <button
             type="button"
             onClick={handleAddFriend}
-            className="h-[34px] shrink-0 rounded-md bg-accent px-3 text-xs font-semibold text-primary-foreground hover:bg-accent-hover"
+            disabled={sending || newFriendId.length !== 8}
+            className="h-[34px] shrink-0 rounded-md bg-accent px-3 text-xs font-semibold text-primary-foreground hover:bg-accent-hover disabled:opacity-50"
           >
-            Add
+            {sending ? 'Sending...' : 'Send request'}
           </button>
         </div>
         {addError && <p className="mt-1.5 text-xs text-muted-red">{addError}</p>}
       </Section>
 
+      {pendingIncoming.length > 0 && (
+        <Section title="Requests">
+          <ul className="flex flex-col gap-1.5">
+            {pendingIncoming.map((request) => (
+              <li key={request.from} className="flex items-center gap-3 rounded-lg bg-surface2 p-2">
+                <Avatar id={request.from} name={request.fromName || request.from} size={32} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{request.fromName || request.from}</div>
+                  <div className="font-mono text-[11px] text-text-tertiary">{request.from}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDecline(request.from)}
+                  className="rounded-md border border-border px-2.5 py-1 text-xs hover:bg-surface"
+                >
+                  Decline
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAccept(request.from)}
+                  className="rounded-md bg-accent px-2.5 py-1 text-xs font-semibold text-primary-foreground hover:bg-accent-hover"
+                >
+                  Accept
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
       <Section title="Friends">
-        {friends.length === 0 ? (
+        {friends.length === 0 && pendingOutgoing.length === 0 ? (
           <p className="py-4 text-center text-xs text-text-tertiary">
             No friends added yet. Share your Wisp ID to get started.
           </p>
         ) : (
           <ul className="flex flex-col gap-1.5">
+            {pendingOutgoing.map((pending) => (
+              <li key={pending.wispId} className="flex items-center gap-3 rounded-lg bg-surface2 p-2 opacity-60">
+                <Avatar id={pending.wispId} name={pending.wispId} size={32} />
+                <div className="min-w-0 flex-1">
+                  <div className="font-mono text-[11px] text-text-tertiary">{pending.wispId}</div>
+                </div>
+                <span className="rounded-full bg-text-tertiary/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-text-tertiary">
+                  Sent
+                </span>
+              </li>
+            ))}
             {friends.map((friend) => (
               <li
                 key={friend.wispId}
@@ -830,7 +893,7 @@ export default function Settings({ onClose }: SettingsProps) {
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         className={cn(
-          'flex w-[600px] max-w-[600px] max-h-[95vh] flex-col rounded-2xl border border-border bg-surface p-0',
+          'flex w-[720px] max-w-[720px] max-h-[95vh] flex-col rounded-2xl border border-border bg-surface p-0',
           'animate-fade-scale-in shadow-2xl',
         )}
       >
@@ -843,13 +906,13 @@ export default function Settings({ onClose }: SettingsProps) {
         </header>
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as Tab)} className="flex-col">
-          <TabsList className="h-auto w-full shrink-0 justify-start gap-0.5 rounded-none border-b border-border bg-transparent px-5 py-2">
+          <TabsList className="h-auto w-full shrink-0 flex-nowrap justify-start gap-0.5 rounded-none border-b border-border bg-transparent px-5 py-2">
             {TABS.map((tab) => (
               <TabsTrigger
                 key={tab.id}
                 value={tab.id}
                 className={cn(
-                  'rounded-none border-b-2 border-transparent bg-transparent px-3 py-2 text-xs whitespace-nowrap',
+                  'rounded-none border-b-2 border-transparent bg-transparent px-4 py-2.5 text-[13px] whitespace-nowrap',
                   'data-active:border-accent data-active:bg-transparent data-active:text-text-primary data-active:shadow-none',
                 )}
               >

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
-import { listen } from '@tauri-apps/api/event'
+import { emit, listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { currentMonitor, getCurrentWindow, PhysicalPosition } from '@tauri-apps/api/window'
 import { Lock } from 'lucide-react'
@@ -61,10 +61,16 @@ export default function Overlay() {
     let unlistenPeers: (() => void) | undefined
     let unlistenSpeaking: (() => void) | undefined
     let unlistenMute: (() => void) | undefined
+    let unlistenReady: (() => void) | undefined
     let cancelled = false
 
     void (async () => {
       try {
+        // Register the state listeners first so they're guaranteed active
+        // before 'overlay-ready' ever triggers a state request below - the
+        // overlay window gets re-navigated (full reload) each time it's
+        // shown, so without this ordering a request fired too early would
+        // race the main window's reply and the overlay would stay blank.
         unlistenPeers = await listen<Peer[]>('peers-updated', (event) => {
           setPeers(event.payload)
         })
@@ -75,6 +81,18 @@ export default function Overlay() {
         unlistenMute = await listen<boolean>('mute-changed', (event) => {
           setLocalMuted(event.payload)
         })
+
+        // Rust emits this once the window is actually visible (after
+        // show_overlay() completes). Request a fresh state snapshot at that
+        // point instead of hoping the main window's push arrived in time.
+        unlistenReady = await listen('overlay-ready', () => {
+          void emit('overlay-needs-state', undefined).catch(() => {})
+        })
+
+        // Also request immediately on mount, in case this effect's listeners
+        // registered after the window was already shown and 'overlay-ready'
+        // already fired once.
+        void emit('overlay-needs-state', undefined).catch(() => {})
       } catch {
         // Tauri event API unavailable outside a Tauri window (browser/dev preview)
       }
@@ -82,6 +100,7 @@ export default function Overlay() {
         unlistenPeers?.()
         unlistenSpeaking?.()
         unlistenMute?.()
+        unlistenReady?.()
       }
     })()
 
@@ -90,6 +109,7 @@ export default function Overlay() {
       unlistenPeers?.()
       unlistenSpeaking?.()
       unlistenMute?.()
+      unlistenReady?.()
     }
   }, [])
 

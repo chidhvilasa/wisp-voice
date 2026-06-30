@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use tauri::{AppHandle, Manager, PhysicalPosition, Position, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, Position, WebviewWindow};
 
 const OVERLAY_WINDOW_LABEL: &str = "overlay";
 const OVERLAY_POSITION_FILE: &str = "overlay_pos.json";
@@ -48,7 +48,23 @@ pub fn show_overlay(app: AppHandle) -> Result<(), String> {
     window.show().map_err(|e| {
         eprintln!("[wisp:overlay] failed to show overlay window: {e}");
         e.to_string()
-    })
+    })?;
+
+    // Windows in particular can drop always-on-top z-order once a window has
+    // been hidden/shown again, so re-assert it every time the overlay is
+    // revealed rather than relying solely on the one-time config value.
+    if let Err(e) = window.set_always_on_top(true) {
+        eprintln!("[wisp:overlay] failed to set always-on-top: {e}");
+    }
+
+    // The overlay's React tree may have mounted earlier (while the window
+    // was still hidden/loading) and missed whatever state events fired
+    // before it was ready to listen. Emitting this once the window is
+    // actually visible lets Overlay.tsx re-fetch current state on demand
+    // instead of depending on having caught every prior event.
+    let _ = window.emit_to(OVERLAY_WINDOW_LABEL, "overlay-ready", ());
+
+    Ok(())
 }
 
 #[tauri::command]

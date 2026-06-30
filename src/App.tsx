@@ -4,10 +4,12 @@ import Router from './router'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { UpdateBanner } from './components/UpdateBanner'
 import { InvitePopup } from './components/InvitePopup'
+import { FriendRequestPopup } from './components/FriendRequestPopup'
 import { usePresence } from './hooks/usePresence'
 import { useSettingsStore } from './store/settingsStore'
 import { useVoiceStore } from './store/voiceStore'
 import { joinRoom, saveRecentRoom } from './lib/rooms'
+import { acceptRequest, declineRequest } from './lib/friends'
 
 function isOverlayRoute(): boolean {
   return window.location.hash.replace(/^#/, '').startsWith('/overlay')
@@ -24,12 +26,13 @@ function navigate(path: string): void {
 // rendered for the main window's route keeps the overlay window from ever
 // calling it.
 function MainAppShell() {
-  const { activeInvite, clearInvite } = usePresence()
+  const { activeInvite, clearInvite, markInviteUsed, activeFriendRequest, clearFriendRequest } = usePresence()
 
   const handleAcceptInvite = () => {
     if (!activeInvite) return
     const { roomCode } = activeInvite
     const displayName = useSettingsStore.getState().displayName
+    markInviteUsed(roomCode)
     clearInvite()
     useVoiceStore.getState().setIsHost(false)
     useVoiceStore.getState().setRoomCode(roomCode)
@@ -40,6 +43,18 @@ function MainAppShell() {
     navigate('/room')
   }
 
+  const handleAcceptFriendRequest = () => {
+    if (!activeFriendRequest) return
+    acceptRequest(activeFriendRequest.from)
+    clearFriendRequest()
+  }
+
+  const handleDeclineFriendRequest = () => {
+    if (!activeFriendRequest) return
+    declineRequest(activeFriendRequest.from)
+    clearFriendRequest()
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <UpdateBanner />
@@ -48,6 +63,13 @@ function MainAppShell() {
       </ErrorBoundary>
       {activeInvite && (
         <InvitePopup invite={activeInvite} onAccept={handleAcceptInvite} onDecline={clearInvite} />
+      )}
+      {!activeInvite && activeFriendRequest && (
+        <FriendRequestPopup
+          request={activeFriendRequest}
+          onAccept={handleAcceptFriendRequest}
+          onDecline={handleDeclineFriendRequest}
+        />
       )}
     </div>
   )

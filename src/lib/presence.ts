@@ -7,16 +7,40 @@ export interface InvitePayload {
   roomCode: string
 }
 
+export interface FriendRequestPayload {
+  from: string
+  fromName: string
+}
+
+export interface FriendAcceptedPayload {
+  from: string
+  name: string
+}
+
+export interface PresenceHandlers {
+  onInvite?: (invite: InvitePayload) => void
+  onFriendRequest?: (request: FriendRequestPayload) => void
+  onFriendAccepted?: (payload: FriendAcceptedPayload) => void
+}
+
+interface IncomingMessage {
+  type?: string
+  from?: string
+  fromName?: string
+  roomCode?: string
+  name?: string
+}
+
 export class PresenceClient {
   private ws: WebSocket | null = null
   private wispId = ''
-  private onInvite: ((invite: InvitePayload) => void) | null = null
+  private handlers: PresenceHandlers = {}
   private reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null
   private shouldReconnect = false
 
-  connect(wispId: string, onInvite: (invite: InvitePayload) => void): void {
+  connect(wispId: string, handlers: PresenceHandlers): void {
     this.wispId = wispId
-    this.onInvite = onInvite
+    this.handlers = handlers
     this.shouldReconnect = true
     this.open()
   }
@@ -37,11 +61,23 @@ export class PresenceClient {
   }
 
   async sendInvite(toWispId: string, fromName: string, roomCode: string): Promise<boolean> {
+    return this.post('/invite', { from: this.wispId, fromName, to: toWispId, roomCode })
+  }
+
+  async sendFriendRequest(toWispId: string, fromName: string): Promise<boolean> {
+    return this.post('/friend-request', { from: this.wispId, fromName, to: toWispId })
+  }
+
+  async sendFriendAccepted(toWispId: string, name: string): Promise<boolean> {
+    return this.post('/friend-accept', { from: this.wispId, name, to: toWispId })
+  }
+
+  private async post(path: string, body: Record<string, string>): Promise<boolean> {
     try {
-      const response = await fetch(`https://${SIGNALING_HOST}/invite`, {
+      const response = await fetch(`https://${SIGNALING_HOST}${path}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: this.wispId, fromName, to: toWispId, roomCode }),
+        body: JSON.stringify(body),
       })
       return response.ok
     } catch {
@@ -58,16 +94,26 @@ export class PresenceClient {
 
       ws.onmessage = (event: MessageEvent) => {
         try {
-          const message = JSON.parse(event.data as string) as Partial<InvitePayload> & { type?: string }
+          const message = JSON.parse(event.data as string) as IncomingMessage
           if (
             message.type === 'room-invite' &&
             typeof message.from === 'string' &&
             typeof message.roomCode === 'string'
           ) {
-            this.onInvite?.({
+            this.handlers.onInvite?.({
               from: message.from,
               fromName: typeof message.fromName === 'string' ? message.fromName : '',
               roomCode: message.roomCode,
+            })
+          } else if (message.type === 'friend-request' && typeof message.from === 'string') {
+            this.handlers.onFriendRequest?.({
+              from: message.from,
+              fromName: typeof message.fromName === 'string' ? message.fromName : '',
+            })
+          } else if (message.type === 'friend-accepted' && typeof message.from === 'string') {
+            this.handlers.onFriendAccepted?.({
+              from: message.from,
+              name: typeof message.name === 'string' ? message.name : '',
             })
           }
         } catch {

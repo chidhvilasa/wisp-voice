@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   Bug,
   Check,
-  Copy,
   Headphones,
   HeadphoneOff,
   Lock,
@@ -30,7 +29,6 @@ import MicMeter from '../components/MicMeter'
 import Settings from './Settings'
 import { PeerCard } from '../components/wisp/PeerCard'
 import { ConnectionStatus } from '../components/wisp/ConnectionStatus'
-import { ToolbarButton } from '../components/wisp/ToolbarButton'
 import { ChatPanel } from '../components/wisp/ChatPanel'
 import { Avatar } from '../components/wisp/Avatar'
 import type { Peer as WispPeer, ChatMessage as WispChatMessage } from '../components/wisp/types'
@@ -72,13 +70,15 @@ function signalFromQuality(quality: ConnectionQuality): 1 | 2 | 3 {
 interface GridConfig {
   columns: string
   maxWidth: number
-  avatarSize: 68 | 72 | 80
+  avatarSize: 60 | 68 | 80
+  gap: number
+  minHeight: number
 }
 
 function getGridConfig(count: number): GridConfig {
-  if (count <= 2) return { columns: 'repeat(2, 1fr)', maxWidth: 720, avatarSize: 80 }
-  if (count === 3) return { columns: 'repeat(3, 1fr)', maxWidth: 900, avatarSize: 72 }
-  return { columns: 'repeat(2, 1fr)', maxWidth: 680, avatarSize: 68 }
+  if (count <= 2) return { columns: 'repeat(2, 1fr)', maxWidth: 720, avatarSize: 80, gap: 24, minHeight: 220 }
+  if (count === 3) return { columns: 'repeat(3, 1fr)', maxWidth: 900, avatarSize: 68, gap: 16, minHeight: 200 }
+  return { columns: 'repeat(2, 1fr)', maxWidth: 680, avatarSize: 60, gap: 16, minHeight: 180 }
 }
 
 export default function Room() {
@@ -145,7 +145,6 @@ export default function Room() {
   }, [chatMessages, showChat, displayName])
   const [showDebug, setShowDebug] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [emptyStateCopied, setEmptyStateCopied] = useState(false)
   const [volumes, setVolumes] = useState<Record<string, number>>({})
 
   const [debugInfo, setDebugInfo] = useState<PeerDebugInfo[]>([])
@@ -163,16 +162,6 @@ export default function Room() {
       .then(() => {
         setCopied(true)
         setTimeout(() => setCopied(false), 2000)
-      })
-      .catch(() => {})
-  }, [roomCode])
-
-  const handleCopyEmptyState = useCallback(() => {
-    void navigator.clipboard
-      .writeText(roomCode)
-      .then(() => {
-        setEmptyStateCopied(true)
-        setTimeout(() => setEmptyStateCopied(false), 2000)
       })
       .catch(() => {})
   }, [roomCode])
@@ -312,18 +301,7 @@ export default function Room() {
               >
                 <ArrowLeft size={16} />
               </button>
-              <div className="flex items-center gap-1.5">
-                <span className="font-mono text-sm font-semibold tracking-[0.15em] text-white">{roomCode}</span>
-                <button
-                  type="button"
-                  onClick={handleCopyCode}
-                  aria-label="Copy room code"
-                  className="flex items-center gap-1 rounded-md px-1.5 py-1 text-text-tertiary hover:bg-surface2 hover:text-text-primary"
-                >
-                  {copied ? <Check size={12} className="text-speaking" /> : <Copy size={12} />}
-                  {copied && <span className="text-[11px] text-speaking">Copied!</span>}
-                </button>
-              </div>
+              <span className="font-mono text-sm font-semibold tracking-[0.15em] text-white">{roomCode}</span>
 
               <div className="relative">
                 <button
@@ -434,14 +412,6 @@ export default function Room() {
               >
                 <Bug size={14} />
               </button>
-              <button
-                type="button"
-                onClick={() => setShowSettings(true)}
-                aria-label="Open settings"
-                className="grid h-8 w-8 place-items-center rounded-md text-text-tertiary hover:bg-surface2"
-              >
-                <SettingsIcon size={14} />
-              </button>
               <span className="rounded-full bg-surface2 px-2.5 py-1 font-mono text-xs text-text-secondary">
                 {wispPeers.length}/4
               </span>
@@ -449,35 +419,26 @@ export default function Room() {
           </header>
 
           <div className="flex flex-1 overflow-hidden">
-            <div className="grid flex-1 place-items-center overflow-y-auto p-8">
+            <div className="grid flex-1 place-items-center overflow-y-auto p-8 pb-20">
               {alone ? (
-                <div className="flex flex-col items-center gap-5">
-                  <div className="flex h-[320px] w-[320px] flex-col items-center justify-center gap-3 rounded-2xl border-2 border-accent/40 bg-surface p-6 animate-border-pulse-subtle">
+                <div className="flex w-full max-w-[400px] flex-col items-center gap-5">
+                  <div className="flex min-h-[280px] w-full flex-col items-center justify-center gap-3 rounded-2xl border-2 border-accent/40 bg-surface p-6 animate-border-pulse-subtle">
                     <Avatar id="self" name={selfName} size={120} />
                     <span className="text-lg font-medium">{selfName}</span>
                     <span className="text-sm text-text-tertiary">Waiting for friends to join...</span>
                   </div>
                   <div className="flex flex-col items-center gap-2 text-center">
                     <span className="text-sm text-text-tertiary">Share your room code to invite friends</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-2xl font-bold tracking-[0.15em] text-accent">{roomCode}</span>
-                      <button
-                        type="button"
-                        onClick={handleCopyEmptyState}
-                        aria-label="Copy room code"
-                        className="grid h-8 w-8 place-items-center rounded-md text-text-tertiary hover:bg-surface2 hover:text-text-primary"
-                      >
-                        {emptyStateCopied ? <Check size={14} className="text-speaking" /> : <Copy size={14} />}
-                      </button>
-                    </div>
+                    <span className="font-mono text-2xl font-bold tracking-[0.15em] text-accent">{roomCode}</span>
                   </div>
                 </div>
               ) : (
                 <div
-                  className="grid w-full gap-4"
+                  className="grid w-full"
                   style={{
                     gridTemplateColumns: gridConfig.columns,
                     maxWidth: gridConfig.maxWidth,
+                    gap: gridConfig.gap,
                     transition: 'grid-template-columns 300ms ease',
                   }}
                 >
@@ -486,6 +447,7 @@ export default function Room() {
                       key={peer.id}
                       peer={peer}
                       avatarSize={gridConfig.avatarSize}
+                      minHeight={gridConfig.minHeight}
                       volume={volumes[peer.id] ?? 100}
                       onVolumeChange={(v) => handleVolumeChange(peer.id, v)}
                     />
@@ -546,64 +508,88 @@ export default function Room() {
           </div>
 
           <MicMeter analyser={analyser} isMuted={localMuted} />
+        </div>
 
-          <div
-            className="relative flex h-16 items-center justify-center border-t border-border"
-            style={{ background: '#0A0A0C' }}
-          >
-            <div className="absolute left-4 top-1/2 flex -translate-y-1/2 items-center gap-2">
-              <Avatar id="self" name={selfName} size={32} />
-              <div className="text-xs">
-                <div className="font-medium">{selfName}</div>
-                <div className="flex items-center gap-1.5 text-text-tertiary">
-                  <span className={`h-1.5 w-1.5 rounded-full ${localMuted ? 'bg-muted-red' : 'bg-speaking'}`} />
-                  <span>In room</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <ToolbarButton
-                tooltip={localMuted ? 'Unmute' : 'Mute'}
-                active={localMuted}
-                danger={localMuted}
-                onClick={toggleMute}
-              >
-                {localMuted ? <MicOff size={18} /> : <Mic size={18} />}
-              </ToolbarButton>
-              <ToolbarButton
-                tooltip={localDeafened ? 'Undeafen' : 'Deafen'}
-                active={localDeafened}
-                danger={localDeafened}
-                onClick={toggleDeafen}
-              >
-                {localDeafened ? <HeadphoneOff size={18} /> : <Headphones size={18} />}
-              </ToolbarButton>
-              <div className="relative inline-flex">
-                <ToolbarButton
-                  tooltip="Chat"
-                  active={showChat}
-                  onClick={() => {
-                    setShowChat((prev) => !prev)
-                    setUnreadCount(0)
-                  }}
-                >
-                  <MessageCircle size={18} />
-                </ToolbarButton>
-                {unreadCount > 0 && (
-                  <span className="animate-badge-pop absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#EF4444] px-1 text-[11px] font-bold leading-none text-white">
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </span>
-                )}
-              </div>
-              <ToolbarButton tooltip="Settings" onClick={() => setShowSettings(true)}>
-                <SettingsIcon size={18} />
-              </ToolbarButton>
-              <ToolbarButton tooltip="Leave" danger onClick={handleLeave}>
-                <LogOut size={18} />
-              </ToolbarButton>
+        {/* Element A: floating user info pill (bottom-left) */}
+        <div
+          className="fixed bottom-3 left-3 z-30 flex min-w-[180px] items-center gap-2.5 rounded-xl px-3 py-2 shadow-[0_4px_12px_rgba(0,0,0,0.4)]"
+          style={{ background: '#1A1A1E', border: '1px solid rgba(255,255,255,0.08)' }}
+        >
+          <Avatar id="self" name={selfName} size={32} />
+          <div className="flex-1 text-xs">
+            <div className="font-semibold text-white">{selfName}</div>
+            <div className="flex items-center gap-1.5 text-text-tertiary">
+              <span className={`h-1.5 w-1.5 rounded-full ${localMuted ? 'bg-muted-red' : 'bg-speaking'}`} />
+              <span>In room</span>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={toggleMute}
+            aria-label={localMuted ? 'Unmute' : 'Mute'}
+            className={cn(
+              'grid h-7 w-7 shrink-0 place-items-center rounded-full transition-colors',
+              localMuted ? 'bg-muted-red text-white' : 'bg-transparent text-white hover:bg-white/10',
+            )}
+          >
+            {localMuted ? <MicOff size={14} /> : <Mic size={14} />}
+          </button>
+          <button
+            type="button"
+            onClick={toggleDeafen}
+            aria-label={localDeafened ? 'Undeafen' : 'Deafen'}
+            className={cn(
+              'grid h-7 w-7 shrink-0 place-items-center rounded-full transition-colors',
+              localDeafened ? 'bg-muted-red text-white' : 'bg-transparent text-white hover:bg-white/10',
+            )}
+          >
+            {localDeafened ? <HeadphoneOff size={14} /> : <Headphones size={14} />}
+          </button>
+        </div>
+
+        {/* Element B: floating action buttons (bottom-center) */}
+        <div
+          className="fixed bottom-3 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-xl px-3 py-2 shadow-[0_4px_12px_rgba(0,0,0,0.4)]"
+          style={{ background: '#1A1A1E', border: '1px solid rgba(255,255,255,0.08)' }}
+        >
+          <div className="relative inline-flex">
+            <button
+              type="button"
+              onClick={() => {
+                setShowChat((prev) => !prev)
+                setUnreadCount(0)
+              }}
+              aria-label="Chat"
+              className={cn(
+                'grid h-9 w-9 place-items-center rounded-full transition-colors',
+                showChat ? 'bg-accent text-primary-foreground' : 'bg-transparent text-white hover:bg-white/10',
+              )}
+            >
+              <MessageCircle size={16} />
+            </button>
+            {unreadCount > 0 && (
+              <span className="animate-badge-pop absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#EF4444] px-1 text-[11px] font-bold leading-none text-white">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowSettings(true)}
+            aria-label="Settings"
+            className="grid h-9 w-9 place-items-center rounded-full bg-transparent text-white transition-colors hover:bg-white/10"
+          >
+            <SettingsIcon size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={handleLeave}
+            aria-label="Leave"
+            className="grid h-9 w-9 place-items-center rounded-full text-white transition-colors"
+            style={{ background: '#EF4444' }}
+          >
+            <LogOut size={16} />
+          </button>
         </div>
 
         {showSettings && <Settings onClose={() => setShowSettings(false)} />}

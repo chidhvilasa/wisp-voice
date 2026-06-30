@@ -308,8 +308,16 @@ export function useVoice(): UseVoiceResult {
     const handleOverlayToggle = () => {
       overlayVisibleRef.current = !overlayVisibleRef.current
       const showing = overlayVisibleRef.current
-      void invoke(showing ? 'show_overlay' : 'hide_overlay').catch(() => {})
-      if (showing) useVoiceStore.getState().republishState()
+      // The overlay window now requests its own state refresh via
+      // 'overlay-needs-state' once it has actually mounted (see
+      // Overlay.tsx), so this push is just a best-effort head start for the
+      // common case - it's no longer the only thing standing between the
+      // overlay and a blank screen.
+      void invoke(showing ? 'show_overlay' : 'hide_overlay')
+        .then(() => {
+          if (showing) useVoiceStore.getState().republishState()
+        })
+        .catch(() => {})
     }
 
     const handleOverlayMode = () => {
@@ -330,6 +338,10 @@ export function useVoice(): UseVoiceResult {
       'hotkey-soundboard-3': () => playSoundboardSlot(2),
       'hotkey-soundboard-4': () => playSoundboardSlot(3),
       'hotkey-soundboard-5': () => playSoundboardSlot(4),
+      // The overlay window requests this itself once it has actually
+      // mounted and registered its own listeners (see Overlay.tsx) - more
+      // reliable than this window guessing when the overlay is ready.
+      'overlay-needs-state': () => useVoiceStore.getState().republishState(),
     }
 
     void (async () => {
