@@ -556,11 +556,11 @@ function FriendsTab() {
     <div className="flex flex-col gap-3">
       <Section title="Your Wisp ID">
         <div className="flex items-center gap-3 rounded-lg bg-surface2 p-3">
-          <div className="flex-1 font-mono text-2xl tracking-[0.2em] text-accent">{wispId}</div>
+          <div className="min-w-0 flex-1 truncate font-mono text-2xl tracking-[0.2em] text-accent">{wispId}</div>
           <button
             type="button"
             onClick={handleCopyId}
-            className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs hover:border-border-hover"
+            className="shrink-0 flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs hover:border-border-hover"
           >
             {copied ? <Check size={12} className="text-speaking" /> : null}
             {copied ? 'Copied' : 'Copy ID'}
@@ -576,7 +576,7 @@ function FriendsTab() {
             onChange={(event) => setNewFriendId(event.target.value.toUpperCase().slice(0, 8))}
             placeholder="Enter their Wisp ID (8 characters)"
             maxLength={8}
-            className="h-[34px] flex-1 rounded-md border border-border bg-surface2 px-2.5 font-mono text-xs outline-none focus:border-accent"
+            className="h-[34px] min-w-0 flex-1 rounded-md border border-border bg-surface2 px-2.5 font-mono text-xs outline-none focus:border-accent"
           />
           <button
             type="button"
@@ -901,7 +901,7 @@ export default function Settings({ onClose }: SettingsProps) {
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         className={cn(
-          'flex w-[800px] max-w-[800px] h-[620px] max-h-[90vh] flex-col rounded-2xl border border-border bg-surface p-0',
+          'flex w-[92vw] max-w-[920px] h-[88vh] max-h-[700px] flex-col rounded-2xl border border-border bg-surface p-0',
           'animate-fade-scale-in shadow-2xl',
         )}
       >

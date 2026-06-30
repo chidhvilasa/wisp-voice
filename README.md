@@ -12,9 +12,9 @@ Wisp is a lightweight desktop voice chat app built for gaming. Real installable 
 
 | Platform | Download |
 |---|---|
-| Windows | [Wisp_0.5.0_x64-setup.exe](https://github.com/chidhvilasa/wisp-voice/releases/download/v0.5.0/Wisp_0.5.0_x64-setup.exe) |
-| macOS (Intel + Apple Silicon) | [Wisp_0.5.0_universal.dmg](https://github.com/chidhvilasa/wisp-voice/releases/download/v0.5.0/Wisp_0.5.0_universal.dmg) |
-| Linux | [Wisp_0.5.0_amd64.AppImage](https://github.com/chidhvilasa/wisp-voice/releases/download/v0.5.0/Wisp_0.5.0_amd64.AppImage) |
+| Windows | [Wisp_0.5.4_x64-setup.exe](https://github.com/chidhvilasa/wisp-voice/releases/download/v0.5.4/Wisp_0.5.4_x64-setup.exe) |
+| macOS (Intel + Apple Silicon) | [Wisp_0.5.4_universal.dmg](https://github.com/chidhvilasa/wisp-voice/releases/download/v0.5.4/Wisp_0.5.4_universal.dmg) |
+| Linux | [Wisp_0.5.4_amd64.AppImage](https://github.com/chidhvilasa/wisp-voice/releases/download/v0.5.4/Wisp_0.5.4_amd64.AppImage) |
 
 [All releases →](https://github.com/chidhvilasa/wisp-voice/releases)
 
@@ -51,7 +51,8 @@ Discord uses ~400MB RAM and 3-8% CPU while idle. Wisp uses ~42MB RAM and under 1
 - **Text chat** — via WebRTC DataChannel, no server needed, with an iOS-style unread badge
 - **Soundboard** — 5 bindable audio slots
 - **Global hotkeys** — work while any game is focused
-- **Settings from anywhere** — full settings available on the home screen, not just inside a room
+- **Settings from anywhere** — full settings available on the home screen, not just inside a room, with a fixed-size sidebar layout that scales with your window
+- **Floating in-room controls** — a single Discord-style panel for mic, deafen, chat, settings, and leave that scales with the window
 - **System tray** — mute and deafen without leaving your game
 - **Auto-updater** — checks shortly after launch, shows an in-app banner, installs and relaunches automatically
 - **Works on Jio CGNAT** — ExpressTURN relay ensures connection even on carrier-grade NAT
@@ -62,7 +63,7 @@ Discord uses ~400MB RAM and 3-8% CPU while idle. Wisp uses ~42MB RAM and under 1
 
 ### Windows
 
-Download and run `Wisp_0.5.0_x64-setup.exe`.
+Download and run `Wisp_0.5.4_x64-setup.exe`.
 
 Windows SmartScreen may show a warning because Wisp is not yet code-signed. Click **More info** then **Run anyway**. Wisp is fully open source — you can review every line of code in this repo.
 
@@ -70,7 +71,7 @@ Windows SmartScreen may show a warning because Wisp is not yet code-signed. Clic
 
 **One-command install:**
 ```bash
-curl -L https://github.com/chidhvilasa/wisp-voice/releases/download/v0.5.0/Wisp_0.5.0_universal.dmg -o /tmp/Wisp.dmg && hdiutil attach /tmp/Wisp.dmg && sudo cp -r "/Volumes/Wisp/Wisp.app" /Applications/ && sudo xattr -cr /Applications/Wisp.app && hdiutil detach "/Volumes/Wisp" && open /Applications/Wisp.app
+curl -L https://github.com/chidhvilasa/wisp-voice/releases/download/v0.5.4/Wisp_0.5.4_universal.dmg -o /tmp/Wisp.dmg && hdiutil attach /tmp/Wisp.dmg && sudo cp -r "/Volumes/Wisp/Wisp.app" /Applications/ && sudo xattr -cr /Applications/Wisp.app && hdiutil detach "/Volumes/Wisp" && open /Applications/Wisp.app
 ```
 
 macOS will block the app on first launch because it is not signed with an Apple Developer certificate. To open it:
@@ -85,10 +86,10 @@ Grant microphone permission when prompted: **System Settings → Privacy & Secur
 
 ### Linux
 
-Download `Wisp_0.5.0_amd64.AppImage`, make it executable, and run it:
+Download `Wisp_0.5.4_amd64.AppImage`, make it executable, and run it:
 ```bash
-chmod +x Wisp_0.5.0_amd64.AppImage
-./Wisp_0.5.0_amd64.AppImage
+chmod +x Wisp_0.5.4_amd64.AppImage
+./Wisp_0.5.4_amd64.AppImage
 ```
 
 ---
@@ -122,7 +123,7 @@ chmod +x Wisp_0.5.0_amd64.AppImage
 | TURN relay | ExpressTURN (primary) + OpenRelay (fallback) |
 | Noise suppression | Web Audio API AEC + AGC |
 | State | Zustand |
-| Testing | Vitest (64 tests) |
+| Testing | Vitest (65 tests) |
 | CI/CD | GitHub Actions (Windows + macOS + Linux) |
 
 ---

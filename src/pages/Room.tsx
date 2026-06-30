@@ -505,82 +505,90 @@ export default function Room() {
           <MicMeter analyser={analyser} isMuted={localMuted} />
         </div>
 
-        {/* Single floating bar: user info + all controls, centered at the bottom */}
+        {/* Floating user panel: bottom-left, Discord-style - width scales with the app window */}
         <div
-          className="fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-[14px] px-3.5 py-2 shadow-[0_6px_20px_rgba(0,0,0,0.5)]"
-          style={{ background: '#1A1A1E', border: '1px solid rgba(255,255,255,0.08)' }}
+          className="fixed bottom-4 left-4 z-30 flex items-center justify-between gap-3 rounded-[14px] px-3.5 py-2 shadow-[0_6px_20px_rgba(0,0,0,0.5)]"
+          style={{
+            background: '#1A1A1E',
+            border: '1px solid rgba(255,255,255,0.08)',
+            width: 'clamp(280px, 26vw, 460px)',
+          }}
         >
-          <Avatar id="self" name={selfName} size={32} />
-          <div className="text-xs">
-            <div className="font-semibold text-white">{selfName}</div>
-            <div className="flex items-center gap-1.5 text-text-tertiary">
-              <span className={`h-1.5 w-1.5 rounded-full ${localMuted ? 'bg-muted-red' : 'bg-speaking'}`} />
-              <span>In room</span>
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Avatar id="self" name={selfName} size={32} />
+            <div className="min-w-0 text-xs">
+              <div className="truncate font-semibold text-white">{selfName}</div>
+              <div className="flex items-center gap-1.5 text-text-tertiary">
+                <span className={`h-1.5 w-1.5 rounded-full ${localMuted ? 'bg-muted-red' : 'bg-speaking'}`} />
+                <span>In room</span>
+              </div>
             </div>
           </div>
 
-          <span className="h-6 w-px shrink-0" style={{ background: 'rgba(255,255,255,0.1)' }} />
+          <div className="flex shrink-0 items-center gap-1">
+            <span className="mr-1 h-6 w-px shrink-0" style={{ background: 'rgba(255,255,255,0.1)' }} />
 
-          <button
-            type="button"
-            onClick={toggleMute}
-            aria-label={localMuted ? 'Unmute' : 'Mute'}
-            className={cn(
-              'grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors',
-              localMuted ? 'bg-muted-red text-white' : 'bg-transparent text-white hover:bg-white/10',
-            )}
-          >
-            {localMuted ? <MicOff size={15} /> : <Mic size={15} />}
-          </button>
-          <button
-            type="button"
-            onClick={toggleDeafen}
-            aria-label={localDeafened ? 'Undeafen' : 'Deafen'}
-            className={cn(
-              'grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors',
-              localDeafened ? 'bg-muted-red text-white' : 'bg-transparent text-white hover:bg-white/10',
-            )}
-          >
-            {localDeafened ? <HeadphoneOff size={15} /> : <Headphones size={15} />}
-          </button>
-          <div className="relative inline-flex">
             <button
               type="button"
-              onClick={() => {
-                setShowChat((prev) => !prev)
-                setUnreadCount(0)
-              }}
-              aria-label="Chat"
+              onClick={toggleMute}
+              aria-label={localMuted ? 'Unmute' : 'Mute'}
               className={cn(
-                'grid h-8 w-8 place-items-center rounded-full transition-colors',
-                showChat ? 'bg-accent text-primary-foreground' : 'bg-transparent text-white hover:bg-white/10',
+                'grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors',
+                localMuted ? 'bg-muted-red text-white' : 'bg-transparent text-white hover:bg-white/10',
               )}
             >
-              <MessageCircle size={15} />
+              {localMuted ? <MicOff size={15} /> : <Mic size={15} />}
             </button>
-            {unreadCount > 0 && (
-              <span className="animate-badge-pop absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#EF4444] px-1 text-[11px] font-bold leading-none text-white">
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </span>
-            )}
+            <button
+              type="button"
+              onClick={toggleDeafen}
+              aria-label={localDeafened ? 'Undeafen' : 'Deafen'}
+              className={cn(
+                'grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors',
+                localDeafened ? 'bg-muted-red text-white' : 'bg-transparent text-white hover:bg-white/10',
+              )}
+            >
+              {localDeafened ? <HeadphoneOff size={15} /> : <Headphones size={15} />}
+            </button>
+            <div className="relative inline-flex">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowChat((prev) => !prev)
+                  setUnreadCount(0)
+                }}
+                aria-label="Chat"
+                className={cn(
+                  'grid h-8 w-8 place-items-center rounded-full transition-colors',
+                  showChat ? 'bg-accent text-primary-foreground' : 'bg-transparent text-white hover:bg-white/10',
+                )}
+              >
+                <MessageCircle size={15} />
+              </button>
+              {unreadCount > 0 && (
+                <span className="animate-badge-pop absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#EF4444] px-1 text-[11px] font-bold leading-none text-white">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowSettings(true)}
+              aria-label="Settings"
+              className="grid h-8 w-8 place-items-center rounded-full bg-transparent text-white transition-colors hover:bg-white/10"
+            >
+              <SettingsIcon size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={handleLeave}
+              aria-label="Leave"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-white transition-colors"
+              style={{ background: '#EF4444' }}
+            >
+              <LogOut size={15} />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowSettings(true)}
-            aria-label="Settings"
-            className="grid h-8 w-8 place-items-center rounded-full bg-transparent text-white transition-colors hover:bg-white/10"
-          >
-            <SettingsIcon size={15} />
-          </button>
-          <button
-            type="button"
-            onClick={handleLeave}
-            aria-label="Leave"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-white transition-colors"
-            style={{ background: '#EF4444' }}
-          >
-            <LogOut size={15} />
-          </button>
         </div>
 
         {showSettings && <Settings onClose={() => setShowSettings(false)} />}
