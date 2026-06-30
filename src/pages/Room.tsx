@@ -301,13 +301,11 @@ export default function Room() {
               >
                 <ArrowLeft size={16} />
               </button>
-              <span className="font-mono text-sm font-semibold tracking-[0.15em] text-white">{roomCode}</span>
-
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setShowShare((prev) => !prev)}
-                  className="ml-2 rounded-full border border-border px-3 py-1.5 text-xs transition-colors hover:border-accent hover:text-accent"
+                  className="rounded-full border border-border px-3 py-1.5 text-xs transition-colors hover:border-accent hover:text-accent"
                 >
                   Invite
                 </button>
@@ -419,7 +417,7 @@ export default function Room() {
           </header>
 
           <div className="flex flex-1 overflow-hidden">
-            <div className="grid flex-1 place-items-center overflow-y-auto p-8 pb-20">
+            <div className="grid flex-1 place-items-center overflow-y-auto p-8 pb-[90px]">
               {alone ? (
                 <div className="flex w-full max-w-[400px] flex-col items-center gap-5">
                   <div className="flex min-h-[280px] w-full flex-col items-center justify-center gap-3 rounded-2xl border-2 border-accent/40 bg-surface p-6 animate-border-pulse-subtle">
@@ -427,10 +425,7 @@ export default function Room() {
                     <span className="text-lg font-medium">{selfName}</span>
                     <span className="text-sm text-text-tertiary">Waiting for friends to join...</span>
                   </div>
-                  <div className="flex flex-col items-center gap-2 text-center">
-                    <span className="text-sm text-text-tertiary">Share your room code to invite friends</span>
-                    <span className="font-mono text-2xl font-bold tracking-[0.15em] text-accent">{roomCode}</span>
-                  </div>
+                  <span className="text-sm text-text-tertiary">Use the Invite button to bring friends in</span>
                 </div>
               ) : (
                 <div
@@ -510,48 +505,44 @@ export default function Room() {
           <MicMeter analyser={analyser} isMuted={localMuted} />
         </div>
 
-        {/* Element A: floating user info pill (bottom-left) */}
+        {/* Single floating bar: user info + all controls, centered at the bottom */}
         <div
-          className="fixed bottom-3 left-3 z-30 flex min-w-[180px] items-center gap-2.5 rounded-xl px-3 py-2 shadow-[0_4px_12px_rgba(0,0,0,0.4)]"
+          className="fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-[14px] px-3.5 py-2 shadow-[0_6px_20px_rgba(0,0,0,0.5)]"
           style={{ background: '#1A1A1E', border: '1px solid rgba(255,255,255,0.08)' }}
         >
           <Avatar id="self" name={selfName} size={32} />
-          <div className="flex-1 text-xs">
+          <div className="text-xs">
             <div className="font-semibold text-white">{selfName}</div>
             <div className="flex items-center gap-1.5 text-text-tertiary">
               <span className={`h-1.5 w-1.5 rounded-full ${localMuted ? 'bg-muted-red' : 'bg-speaking'}`} />
               <span>In room</span>
             </div>
           </div>
+
+          <span className="h-6 w-px shrink-0" style={{ background: 'rgba(255,255,255,0.1)' }} />
+
           <button
             type="button"
             onClick={toggleMute}
             aria-label={localMuted ? 'Unmute' : 'Mute'}
             className={cn(
-              'grid h-7 w-7 shrink-0 place-items-center rounded-full transition-colors',
+              'grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors',
               localMuted ? 'bg-muted-red text-white' : 'bg-transparent text-white hover:bg-white/10',
             )}
           >
-            {localMuted ? <MicOff size={14} /> : <Mic size={14} />}
+            {localMuted ? <MicOff size={15} /> : <Mic size={15} />}
           </button>
           <button
             type="button"
             onClick={toggleDeafen}
             aria-label={localDeafened ? 'Undeafen' : 'Deafen'}
             className={cn(
-              'grid h-7 w-7 shrink-0 place-items-center rounded-full transition-colors',
+              'grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors',
               localDeafened ? 'bg-muted-red text-white' : 'bg-transparent text-white hover:bg-white/10',
             )}
           >
-            {localDeafened ? <HeadphoneOff size={14} /> : <Headphones size={14} />}
+            {localDeafened ? <HeadphoneOff size={15} /> : <Headphones size={15} />}
           </button>
-        </div>
-
-        {/* Element B: floating action buttons (bottom-center) */}
-        <div
-          className="fixed bottom-3 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-xl px-3 py-2 shadow-[0_4px_12px_rgba(0,0,0,0.4)]"
-          style={{ background: '#1A1A1E', border: '1px solid rgba(255,255,255,0.08)' }}
-        >
           <div className="relative inline-flex">
             <button
               type="button"
@@ -561,11 +552,11 @@ export default function Room() {
               }}
               aria-label="Chat"
               className={cn(
-                'grid h-9 w-9 place-items-center rounded-full transition-colors',
+                'grid h-8 w-8 place-items-center rounded-full transition-colors',
                 showChat ? 'bg-accent text-primary-foreground' : 'bg-transparent text-white hover:bg-white/10',
               )}
             >
-              <MessageCircle size={16} />
+              <MessageCircle size={15} />
             </button>
             {unreadCount > 0 && (
               <span className="animate-badge-pop absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#EF4444] px-1 text-[11px] font-bold leading-none text-white">
@@ -577,18 +568,18 @@ export default function Room() {
             type="button"
             onClick={() => setShowSettings(true)}
             aria-label="Settings"
-            className="grid h-9 w-9 place-items-center rounded-full bg-transparent text-white transition-colors hover:bg-white/10"
+            className="grid h-8 w-8 place-items-center rounded-full bg-transparent text-white transition-colors hover:bg-white/10"
           >
-            <SettingsIcon size={16} />
+            <SettingsIcon size={15} />
           </button>
           <button
             type="button"
             onClick={handleLeave}
             aria-label="Leave"
-            className="grid h-9 w-9 place-items-center rounded-full text-white transition-colors"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-white transition-colors"
             style={{ background: '#EF4444' }}
           >
-            <LogOut size={16} />
+            <LogOut size={15} />
           </button>
         </div>
 

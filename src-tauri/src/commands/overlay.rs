@@ -1,3 +1,4 @@
+use crate::commands::topmost::{start_topmost_enforcement, stop_topmost_enforcement};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -64,13 +65,23 @@ pub fn show_overlay(app: AppHandle) -> Result<(), String> {
     // instead of depending on having caught every prior event.
     let _ = window.emit_to(OVERLAY_WINDOW_LABEL, "overlay-ready", ());
 
+    // Tauri's alwaysOnTop alone doesn't reliably beat other windows fighting
+    // for topmost status (this is most visible on Windows against games in
+    // Borderless/Windowed mode). Keep re-asserting topmost via SetWindowPos
+    // on a timer for as long as the overlay stays visible.
+    if let Err(e) = start_topmost_enforcement(app.clone()) {
+        eprintln!("[wisp:overlay] failed to start topmost enforcement: {e}");
+    }
+
     Ok(())
 }
 
 #[tauri::command]
 pub fn hide_overlay(app: AppHandle) -> Result<(), String> {
     let window = overlay_window(&app)?;
-    window.hide().map_err(|e| e.to_string())
+    window.hide().map_err(|e| e.to_string())?;
+    stop_topmost_enforcement();
+    Ok(())
 }
 
 #[tauri::command]

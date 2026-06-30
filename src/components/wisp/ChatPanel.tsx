@@ -53,7 +53,7 @@ export function ChatPanel({ open, onClose, messages, onSend, self }: ChatPanelPr
   }
 
   return (
-    <aside className="w-[380px] shrink-0 border-l border-border bg-surface flex flex-col animate-slide-in-right">
+    <aside className="w-[440px] shrink-0 border-l border-border bg-surface flex flex-col animate-slide-in-right">
       <header className="h-13 flex items-center justify-between px-4 py-3 border-b border-border">
         <span className="text-sm font-semibold">Chat</span>
         <button onClick={onClose} className="text-text-tertiary hover:text-text-primary">
@@ -74,13 +74,13 @@ export function ChatPanel({ open, onClose, messages, onSend, self }: ChatPanelPr
           return (
             <div key={i} className={cn("flex gap-2", isSelf && "flex-row-reverse")}>
               <Avatar id={first.authorId} name={first.authorName ?? "?"} size={28} />
-              <div className={cn("flex flex-col gap-1 max-w-[290px]", isSelf && "items-end")}>
+              <div className={cn("flex flex-col gap-1 max-w-[340px]", isSelf && "items-end")}>
                 <span className="text-[11px] text-text-tertiary">{first.authorName}</span>
                 {group.map((m) => (
                   <div
                     key={m.id}
                     className={cn(
-                      "px-3 py-2 rounded-2xl text-[13px] leading-[1.6] break-words",
+                      "px-3 py-2 rounded-2xl text-[14px] leading-[1.6] break-words",
                       isSelf ? "bg-accent text-primary-foreground" : "bg-surface2",
                     )}
                   >
@@ -97,7 +97,7 @@ export function ChatPanel({ open, onClose, messages, onSend, self }: ChatPanelPr
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Message..."
-          className="flex-1 h-10 rounded-lg bg-surface2 px-3 text-sm outline-none focus:ring-2 focus:ring-accent"
+          className="flex-1 h-10 rounded-lg bg-surface2 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-accent"
         />
         <button
           type="submit"

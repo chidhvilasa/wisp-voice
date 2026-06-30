@@ -4,6 +4,7 @@ use commands::hotkeys::{register_hotkeys, update_hotkeys};
 use commands::overlay::{get_overlay_position, hide_overlay, set_overlay_position, show_overlay};
 use commands::soundboard::{delete_soundboard_file, save_soundboard_file};
 use commands::sysinfo::{get_app_resource_usage, SysinfoState};
+use commands::topmost::{start_topmost_enforcement, stop_topmost_enforcement};
 use commands::tray::{setup_tray, update_tray_icon};
 use tauri::Manager;
 
@@ -38,7 +39,9 @@ pub fn run() {
             get_app_resource_usage,
             update_hotkeys,
             save_soundboard_file,
-            delete_soundboard_file
+            delete_soundboard_file,
+            start_topmost_enforcement,
+            stop_topmost_enforcement
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

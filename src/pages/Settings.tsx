@@ -11,6 +11,7 @@ import {
   CornerUpRight,
   ExternalLink,
   Ghost,
+  Info,
   Loader2,
   Lock,
   Play,
@@ -379,6 +380,13 @@ function OverlayTab() {
           <div className="text-xs text-text-tertiary">Floating panel during games</div>
         </div>
         <Switch checked={overlayVisible} onCheckedChange={handleToggleVisible} />
+      </div>
+      <div className="flex items-start gap-1.5 px-1 text-[11px] text-text-tertiary">
+        <Info size={12} className="mt-0.5 shrink-0" />
+        <span>
+          Works best with Borderless Windowed or Windowed mode. Some games in Exclusive Fullscreen mode may not
+          show the overlay due to Windows limitations.
+        </span>
       </div>
 
       <Section title="Mode">
