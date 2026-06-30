@@ -505,9 +505,9 @@ export default function Room() {
           <MicMeter analyser={analyser} isMuted={localMuted} />
         </div>
 
-        {/* Floating user panel: bottom-left, Discord-style - width scales with the app window */}
+        {/* Floating user panel: centered at the bottom, width scales with the app window */}
         <div
-          className="fixed bottom-4 left-4 z-30 flex items-center justify-between gap-3 rounded-[14px] px-3.5 py-2 shadow-[0_6px_20px_rgba(0,0,0,0.5)]"
+          className="fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center justify-between gap-3 rounded-[14px] px-3.5 py-2 shadow-[0_6px_20px_rgba(0,0,0,0.5)]"
           style={{
             background: '#1A1A1E',
             border: '1px solid rgba(255,255,255,0.08)',

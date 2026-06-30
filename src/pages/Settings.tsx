@@ -105,7 +105,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-2">
+    <div className="flex items-center justify-between gap-4 py-2.5">
       <span className="text-[13px]">{label}</span>
       <div className="flex items-center gap-3">{children}</div>
     </div>
@@ -158,7 +158,7 @@ function SliderRow({
   suffix?: string
 }) {
   return (
-    <div className="py-2">
+    <div className="py-2.5">
       <div className="mb-1.5 flex items-center justify-between">
         <span className="text-[13px]">{label}</span>
         <span className="font-mono text-xs text-text-secondary">
@@ -171,7 +171,7 @@ function SliderRow({
         min={min}
         max={max}
         onValueChange={(v) => onChange(Array.isArray(v) ? v[0] ?? 0 : v)}
-        className="w-full"
+        className="w-full min-w-[350px]"
       />
     </div>
   )
@@ -218,14 +218,14 @@ function AudioTab() {
   }, [])
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-5">
       <Section title="Input / Output">
-        <div className="py-2">
+        <div className="py-2.5">
           <span className="mb-1.5 block text-[13px]">Input device</span>
           <select
             value={inputDevice}
             onChange={(event) => setInputDevice(event.target.value)}
-            className="h-[34px] w-full truncate rounded-md border border-border bg-surface2 px-2.5 text-xs outline-none focus:border-accent"
+            className="h-[34px] w-full min-w-[400px] truncate rounded-md border border-border bg-surface2 px-2.5 text-xs outline-none focus:border-accent"
           >
             <option value="">System default</option>
             {inputDevices.map((device, index) => (
@@ -235,12 +235,12 @@ function AudioTab() {
             ))}
           </select>
         </div>
-        <div className="py-2">
+        <div className="py-2.5">
           <span className="mb-1.5 block text-[13px]">Output device</span>
           <select
             value={outputDevice}
             onChange={(event) => setOutputDevice(event.target.value)}
-            className="h-[34px] w-full truncate rounded-md border border-border bg-surface2 px-2.5 text-xs outline-none focus:border-accent"
+            className="h-[34px] w-full min-w-[400px] truncate rounded-md border border-border bg-surface2 px-2.5 text-xs outline-none focus:border-accent"
           >
             <option value="">System default</option>
             {outputDevices.map((device, index) => (
@@ -373,7 +373,7 @@ function OverlayTab() {
   const previewPeers = [{ id: 'self', name: displayName || 'You', speaking: true, muted: false }]
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between rounded-lg bg-surface2 p-3">
         <div>
           <div className="text-sm font-medium">Show game overlay</div>
@@ -553,7 +553,7 @@ function FriendsTab() {
   )
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-5">
       <Section title="Your Wisp ID">
         <div className="flex items-center gap-3 rounded-lg bg-surface2 p-3">
           <div className="min-w-0 flex-1 truncate font-mono text-2xl tracking-[0.2em] text-accent">{wispId}</div>
@@ -816,7 +816,7 @@ function AboutTab() {
   }, [])
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-5">
       <div className="flex flex-col items-center gap-1">
         <div className="grid h-11 w-11 place-items-center rounded-2xl bg-accent/15 text-accent">
           <Ghost size={26} />
@@ -901,11 +901,17 @@ export default function Settings({ onClose }: SettingsProps) {
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         className={cn(
-          'flex w-[92vw] max-w-[920px] h-[88vh] max-h-[700px] flex-col rounded-2xl border border-border bg-surface p-0',
+          // The shared DialogContent base className bakes in `sm:max-w-sm`
+          // (384px). twMerge does NOT strip that for a plain `max-w-[...]`
+          // override because they're different variant groups (`sm:` vs
+          // none), so at any viewport >=640px the responsive class wins the
+          // CSS cascade and silently re-caps the width no matter what's
+          // passed here. `!` (important) is the only reliable way to beat it.
+          '!w-[900px] !max-w-[92vw] flex h-[85vh] max-h-[85vh] flex-col rounded-2xl border border-border bg-surface p-0',
           'animate-fade-scale-in shadow-2xl',
         )}
       >
-        <header className="shrink-0 border-b border-border px-5 py-4">
+        <header className="shrink-0 border-b border-border px-6 py-4">
           <h2 className="mb-2 text-base font-semibold">Settings</h2>
           <div className="flex items-center gap-3">
             <Avatar id={displayName || 'You'} name={displayName || 'You'} size={32} />
@@ -919,7 +925,7 @@ export default function Settings({ onClose }: SettingsProps) {
           onValueChange={(value) => setActiveTab(value as Tab)}
           className="min-h-0 flex-1 flex-row gap-0"
         >
-          <TabsList className="h-full w-[160px] shrink-0 flex-col items-stretch gap-0.5 overflow-y-auto rounded-none border-r border-border bg-transparent p-3">
+          <TabsList className="h-full w-[180px] shrink-0 flex-col items-stretch gap-0.5 overflow-y-auto rounded-none border-r border-border bg-transparent p-3">
             {TABS.map((tab) => (
               <TabsTrigger
                 key={tab.id}
@@ -934,7 +940,7 @@ export default function Settings({ onClose }: SettingsProps) {
             ))}
           </TabsList>
 
-          <div className="min-w-0 flex-1 overflow-y-auto px-5 py-4">
+          <div className="min-w-0 flex-1 overflow-y-auto p-8">
             <TabsContent value="audio" className="mt-0">
               <AudioTab />
             </TabsContent>
