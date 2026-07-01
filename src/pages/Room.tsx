@@ -26,6 +26,7 @@ import { getFriends } from '../lib/friends'
 import type { Friend } from '../lib/friends'
 import { presenceClient } from '../lib/presence'
 import MicMeter from '../components/MicMeter'
+import ResourceWidgetInline from '../components/ResourceWidgetInline'
 import Settings from './Settings'
 import { PeerCard } from '../components/wisp/PeerCard'
 import { ConnectionStatus } from '../components/wisp/ConnectionStatus'
@@ -93,8 +94,6 @@ export default function Room() {
   const isHost = useVoiceStore((state) => state.isHost)
   const chatMessages = useVoiceStore((state) => state.chatMessages)
   const lastError = useVoiceStore((state) => state.lastError)
-  const turnUnavailable = useVoiceStore((state) => state.turnUnavailable)
-  const [turnBannerDismissed, setTurnBannerDismissed] = useState(false)
   const [micBannerDismissed, setMicBannerDismissed] = useState(false)
   useEffect(() => {
     setMicBannerDismissed(false)
@@ -276,21 +275,6 @@ export default function Room() {
               </div>
             )
           )}
-          {turnUnavailable && !turnBannerDismissed && (
-            <div className="flex items-center justify-center gap-3 bg-warning/20 px-4 py-2 text-sm text-warning">
-              <AlertCircle className="h-4 w-4 flex-shrink-0" />
-              <span>Relay server unavailable. Connection may fail on some networks.</span>
-              <button
-                type="button"
-                onClick={() => setTurnBannerDismissed(true)}
-                aria-label="Dismiss"
-                className="flex-shrink-0 rounded p-0.5 hover:bg-warning/30"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          )}
-
           <header className="relative flex h-[52px] items-center justify-between border-b border-border bg-surface px-4">
             <div className="flex items-center gap-3">
               <button
@@ -579,6 +563,8 @@ export default function Room() {
             >
               <SettingsIcon size={15} />
             </button>
+            <span className="mx-1 h-6 w-px shrink-0" style={{ background: 'rgba(255,255,255,0.1)' }} />
+            <ResourceWidgetInline />
             <button
               type="button"
               onClick={handleLeave}

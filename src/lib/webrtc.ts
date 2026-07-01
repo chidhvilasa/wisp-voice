@@ -18,19 +18,28 @@ export interface WispVoiceEngineEvents {
   error: (error: Error) => void
 }
 
-// STUN-only - safe to ship in the client bundle since there are no
-// credentials to steal. TURN servers (which require credentials) are fetched
-// from the signaling worker's /ice-servers endpoint at connect time; that
-// endpoint holds the real TURN secrets server-side and is the only place
-// they ever exist. If the fetch fails, P2P still works when a direct or
-// STUN-reflexive path exists, but no TURN relay is available.
-const STUN_ONLY_FALLBACK: RTCIceServer[] = [
+// Built-in fallback used when the signaling worker's /ice-servers endpoint
+// is unreachable. These are free/public TURN credentials (ExpressTURN's free
+// tier, openrelay's public demo credentials) - safe to ship in the client
+// bundle since they're not secrets. This guarantees a relay path always
+// exists even if the worker is down, instead of degrading to STUN-only
+// (which fails behind symmetric NATs).
+const TURN_FALLBACK: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
   { urls: 'stun:stun.cloudflare.com:3478' },
+  {
+    urls: ['turn:free.expressturn.com:3478', 'turn:free.expressturn.com:3478?transport=tcp'],
+    username: '000000002098032839',
+    credential: 'fptqeitFt35/AC42E2DcbZCNGjI=',
+  },
+  {
+    urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turns:openrelay.metered.ca:443'],
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
 ]
-const ICE_SERVERS_FETCH_TIMEOUT_MS = 5000
+const ICE_SERVERS_FETCH_TIMEOUT_MS = 8000
 
 const MAX_REMOTE_PEERS = 3
 const STATS_INTERVAL_MS = 2000
@@ -103,7 +112,7 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
   private iceRestartTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map()
   private iceRestartAttempts: Map<string, number> = new Map()
   private offererPeers: Set<string> = new Set()
-  private iceServers: RTCIceServer[] = STUN_ONLY_FALLBACK
+  private iceServers: RTCIceServer[] = TURN_FALLBACK
   private iceCandidateStats: Map<string, { count: number; hasRelay: boolean }> = new Map()
   private gainNodes: Map<string, GainNode> = new Map()
   private remoteAudioElements: Map<string, HTMLAudioElement> = new Map()
@@ -620,22 +629,25 @@ export class WispVoiceEngine extends EventEmitter<WispVoiceEngineEvents> {
       const res = await fetch(`${SIGNALING_URL}/ice-servers`, {
         signal: AbortSignal.timeout(ICE_SERVERS_FETCH_TIMEOUT_MS),
       })
-      if (!res.ok) {
-        this.emit('turn-unavailable')
-        return
-      }
-      const servers = (await res.json()) as RTCIceServer[]
-      if (Array.isArray(servers) && servers.length > 0) {
-        this.iceServers = servers
-      } else {
-        this.emit('turn-unavailable')
+      if (res.ok) {
+        const servers = (await res.json()) as RTCIceServer[]
+        if (Array.isArray(servers) && servers.length > 0) {
+          this.iceServers = servers
+        }
       }
     } catch {
       if (import.meta.env.DEV) {
-        console.warn('[Wisp] ICE server fetch failed, TURN unavailable')
+        console.warn('[Wisp] ICE server fetch failed, using built-in TURN fallback')
       }
+      // this.iceServers already defaults to TURN_FALLBACK
+    }
+
+    const hasTurnServer = this.iceServers.some((server) => {
+      const urls = Array.isArray(server.urls) ? server.urls : [server.urls]
+      return urls.some((url) => url.includes('turn:'))
+    })
+    if (!hasTurnServer) {
       this.emit('turn-unavailable')
-      // this.iceServers already defaults to the STUN_ONLY_FALLBACK
     }
   }
 
