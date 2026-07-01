@@ -489,19 +489,29 @@ export default function Room() {
           <MicMeter analyser={analyser} isMuted={localMuted} />
         </div>
 
-        {/* Floating user panel: centered at the bottom, width scales with the app window */}
+        {/* Floating user panel: centered at the bottom, width scales with the app window.
+            flex-wrap/white-space/min-width/overflow keep this a single row at all sizes -
+            it only ever overflows the window edges once the window is narrower than the
+            bar's own content, instead of wrapping or squishing internally. */}
         <div
-          className="fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center justify-between gap-3 rounded-[14px] px-3.5 py-2 shadow-[0_6px_20px_rgba(0,0,0,0.5)]"
+          className="fixed bottom-4 left-1/2 z-30 flex flex-nowrap -translate-x-1/2 items-center justify-between gap-3 whitespace-nowrap rounded-[14px] px-3.5 py-2 shadow-[0_6px_20px_rgba(0,0,0,0.5)]"
           style={{
             background: '#1A1A1E',
             border: '1px solid rgba(255,255,255,0.08)',
             width: 'clamp(280px, 26vw, 460px)',
+            minWidth: 'fit-content',
+            overflow: 'visible',
           }}
         >
-          <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex shrink-0 items-center gap-2.5">
             <Avatar id="self" name={selfName} size={32} />
-            <div className="min-w-0 text-xs">
-              <div className="truncate font-semibold text-white">{selfName}</div>
+            <div className="text-xs">
+              <div
+                className="truncate font-semibold text-white"
+                style={{ maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis' }}
+              >
+                {selfName}
+              </div>
               <div className="flex items-center gap-1.5 text-text-tertiary">
                 <span className={`h-1.5 w-1.5 rounded-full ${localMuted ? 'bg-muted-red' : 'bg-speaking'}`} />
                 <span>In room</span>
@@ -534,7 +544,7 @@ export default function Room() {
             >
               {localDeafened ? <HeadphoneOff size={15} /> : <Headphones size={15} />}
             </button>
-            <div className="relative inline-flex">
+            <div className="relative inline-flex shrink-0">
               <button
                 type="button"
                 onClick={() => {
@@ -543,7 +553,7 @@ export default function Room() {
                 }}
                 aria-label="Chat"
                 className={cn(
-                  'grid h-8 w-8 place-items-center rounded-full transition-colors',
+                  'grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors',
                   showChat ? 'bg-accent text-primary-foreground' : 'bg-transparent text-white hover:bg-white/10',
                 )}
               >
@@ -560,7 +570,7 @@ export default function Room() {
               type="button"
               onClick={() => setShowSettings(true)}
               aria-label="Settings"
-              className="grid h-8 w-8 place-items-center rounded-full bg-transparent text-white transition-colors hover:bg-white/10"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-transparent text-white transition-colors hover:bg-white/10"
             >
               <SettingsIcon size={15} />
             </button>

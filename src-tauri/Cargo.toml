@@ -1,6 +1,6 @@
 [package]
 name = "wisp-voice"
-version = "0.6.0"
+version = "0.6.1"
 description = "Wisp - lightweight gaming voice chat"
 authors = ["you"]
 edition = "2021"
