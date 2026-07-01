@@ -26,7 +26,7 @@ import { getFriends } from '../lib/friends'
 import type { Friend } from '../lib/friends'
 import { presenceClient } from '../lib/presence'
 import MicMeter from '../components/MicMeter'
-import ResourceWidgetInline from '../components/ResourceWidgetInline'
+import { PerformanceButton } from '../components/PerformanceButton'
 import Settings from './Settings'
 import { PeerCard } from '../components/wisp/PeerCard'
 import { ConnectionStatus } from '../components/wisp/ConnectionStatus'
@@ -555,6 +555,7 @@ export default function Room() {
                 </span>
               )}
             </div>
+            <PerformanceButton />
             <button
               type="button"
               onClick={() => setShowSettings(true)}
@@ -563,8 +564,6 @@ export default function Room() {
             >
               <SettingsIcon size={15} />
             </button>
-            <span className="mx-1 h-6 w-px shrink-0" style={{ background: 'rgba(255,255,255,0.1)' }} />
-            <ResourceWidgetInline />
             <button
               type="button"
               onClick={handleLeave}
