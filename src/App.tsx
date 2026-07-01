@@ -8,8 +8,32 @@ import { FriendRequestPopup } from './components/FriendRequestPopup'
 import { usePresence } from './hooks/usePresence'
 import { useSettingsStore } from './store/settingsStore'
 import { useVoiceStore } from './store/voiceStore'
-import { joinRoom, saveRecentRoom } from './lib/rooms'
+import { joinRoom, saveRecentRoom, checkMinimumVersion } from './lib/rooms'
 import { acceptRequest, declineRequest } from './lib/friends'
+
+function UnsupportedVersionBanner() {
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 10000,
+        background: '#DC2626',
+        height: '44px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '0 16px',
+      }}
+    >
+      <span style={{ color: 'white', fontSize: '13px', fontWeight: 600 }}>
+        This version of Wisp is no longer supported. Please update to continue.
+      </span>
+    </div>
+  )
+}
 
 function isOverlayRoute(): boolean {
   return window.location.hash.replace(/^#/, '').startsWith('/overlay')
@@ -77,6 +101,7 @@ function MainAppShell() {
 
 function App() {
   const [overlay, setOverlay] = useState(isOverlayRoute())
+  const [needsUpdate, setNeedsUpdate] = useState(false)
 
   useEffect(() => {
     // The Rust backend only knows the hardcoded default key combos until
@@ -93,12 +118,23 @@ function App() {
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
 
+  useEffect(() => {
+    // Gates joinRoom()/createRoom() at the network layer (see lib/rooms.ts);
+    // this just surfaces the same decision to the UI so old installs know why.
+    void checkMinimumVersion().then(setNeedsUpdate)
+  }, [])
+
   // The overlay window needs a fully transparent background (no wrapping
   // div, no UpdateBanner, no invite popup) - Router already renders its own
   // ErrorBoundary for that route, so just defer to it directly here.
   if (overlay) return <Router />
 
-  return <MainAppShell />
+  return (
+    <>
+      {needsUpdate && <UnsupportedVersionBanner />}
+      <MainAppShell />
+    </>
+  )
 }
 
 export default App

@@ -165,28 +165,40 @@ export class WispRoom {
 }
 
 // One WispPresence Durable Object instance per Wisp ID (keyed via
-// idFromName(wispId)), holding at most one live WebSocket - the device
-// currently online under that ID. /invite delivers by looking up this same
-// instance and pushing down the stored socket; there is nothing to persist
-// across instance restarts, so no storage is used here.
+// idFromName(wispId)), tracking live WebSocket connections.
+//
+// Uses the Cloudflare WebSocket Hibernation API (state.acceptWebSocket)
+// instead of the plain accept() approach. With hibernation the DO instance
+// is suspended between incoming messages and only wakes when a message
+// arrives or /deliver is called, consuming essentially zero compute time
+// while idle. This keeps us well within free-tier GB-second limits even
+// with many long-lived presence connections open simultaneously.
 export class WispPresence {
-  private ws: WebSocket | null = null
+  private state: DurableObjectState
+
+  constructor(state: DurableObjectState, _env: Env) {
+    this.state = state
+  }
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url)
 
     if (request.method === 'POST' && url.pathname === '/deliver') {
-      if (!this.ws) {
+      const sockets = this.state.getWebSockets()
+      if (sockets.length === 0) {
         return new Response('Not online', { status: 404 })
       }
       const payload = await request.text()
-      try {
-        this.ws.send(payload)
-        return new Response(null, { status: 200 })
-      } catch {
-        this.ws = null
-        return new Response('Failed to deliver', { status: 404 })
+      let delivered = false
+      for (const ws of sockets) {
+        try {
+          ws.send(payload)
+          delivered = true
+        } catch {
+          // socket errored or was closed; skip
+        }
       }
+      return new Response(null, { status: delivered ? 200 : 404 })
     }
 
     const upgradeHeader = request.headers.get('Upgrade')
@@ -197,15 +209,19 @@ export class WispPresence {
     const pair = new WebSocketPair()
     const client = pair[0]
     const server = pair[1]
-    server.accept()
-    this.ws = server
-
-    server.addEventListener('close', () => {
-      if (this.ws === server) this.ws = null
-    })
+    // acceptWebSocket registers the server-side socket with the DO's
+    // hibernation manager instead of keeping it alive in JS heap
+    this.state.acceptWebSocket(server)
 
     return new Response(null, { status: 101, webSocket: client })
   }
+
+  // Called by the runtime when a hibernated socket receives a message.
+  // Clients only receive on the presence channel; nothing to handle here.
+  webSocketMessage(_ws: WebSocket, _message: string | ArrayBuffer): void {}
+
+  // Called when a hibernated socket closes; cleanup is automatic.
+  webSocketClose(_ws: WebSocket): void {}
 }
 
 const CORS_HEADERS: Record<string, string> = {
@@ -304,12 +320,19 @@ async function buildIceServers(env: Env): Promise<unknown[]> {
   return servers
 }
 
+const APP_VERSION = '0.5.8'
+const MINIMUM_APP_VERSION = '0.5.8'
+
 async function handleRequest(request: Request, env: Env): Promise<Response> {
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS })
   }
 
   const url = new URL(request.url)
+
+  if (request.method === 'GET' && url.pathname === '/version') {
+    return jsonResponse({ minimum: MINIMUM_APP_VERSION, current: APP_VERSION }, 200)
+  }
 
   if (request.method === 'GET' && url.pathname === '/ice-servers') {
     const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown'
